@@ -58,7 +58,7 @@ async function changePassword(req, res, next) {
     user.passwordHash = await bcrypt.hash(newPassword, 12);
     await user.save();
 
-    if (req.user?.jti) revoke(req.user.jti);
+    if (req.user?.jti) revoke(req.user.jti, req.user.exp);
     const newToken = jwt.sign(
       { userId: user._id, role: user.role, jti: crypto.randomUUID() },
       process.env.JWT_SECRET,
@@ -115,7 +115,7 @@ async function deleteMe(req, res, next) {
       ShoppingList.deleteMany({ userId: req.user.userId }),
     ]);
 
-    if (req.user?.jti) revoke(req.user.jti);
+    if (req.user?.jti) revoke(req.user.jti, req.user.exp);
     res.json({ message: 'Account deleted' });
   } catch (err) {
     next(err);

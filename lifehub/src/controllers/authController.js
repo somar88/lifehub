@@ -167,6 +167,6 @@ async function acceptInvite(req, res, next) {
 module.exports = { register, login, logout, forgotPassword, resetPassword, apply, verifyInvite, acceptInvite };
 
 function logout(req, res) {
-  if (req.user?.jti) revoke(req.user.jti);
+  if (req.user?.jti) revoke(req.user.jti, req.user.exp);
   res.json({ message: 'Logged out' });
 }

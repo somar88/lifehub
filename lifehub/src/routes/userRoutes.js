@@ -2,6 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const auth = require('../middleware/auth');
 const { getMe, updateMe, changePassword, changeEmail, deleteMe } = require('../controllers/userController');
+const { emailBody } = require('./validators');
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.post('/me/password', auth, [
 ], changePassword);
 
 router.patch('/me/email', auth, [
-  body('email').isEmail().withMessage('Valid email is required').normalizeEmail({ gmail_remove_dots: false }),
+  emailBody(),
   body('currentPassword').notEmpty().withMessage('Password is required to change email'),
 ], changeEmail);
 

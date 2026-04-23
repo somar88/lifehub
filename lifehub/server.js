@@ -3,11 +3,13 @@ const app = require('./src/app');
 const db = require('./src/config/db');
 const logger = require('./src/config/logger');
 const { startBot } = require('./src/bot/index');
+const { loadBlacklist } = require('./src/middleware/tokenBlacklist');
 
 const PORT = process.env.PORT || 3000;
 
 async function start() {
   await db.connect();
+  await loadBlacklist();
   await startBot(app);
   app.listen(PORT, () => {
     logger.info(`LifeHub server running on port ${PORT}`);

@@ -82,7 +82,7 @@ nvm use 22
 **Option A — Local MongoDB on Linux:**
 
 ```bash
-# Ubuntu / Debian
+# Ubuntu 22.04 (Jammy) — MongoDB 7
 sudo apt-get install -y gnupg curl
 curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
   sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
@@ -94,6 +94,23 @@ sudo apt-get install -y mongodb-org
 sudo systemctl start mongod
 sudo systemctl enable mongod
 ```
+
+```bash
+# Ubuntu 24.04 (Noble) — MongoDB 8 (required; 7 does not support Noble)
+sudo apt-get install -y gnupg curl
+curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | \
+  sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
+echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] \
+  https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | \
+  sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+sudo systemctl start mongod
+sudo systemctl enable mongod
+```
+
+> **WSL note:** If `systemctl` is unavailable, start MongoDB manually:
+> `sudo mongod --fork --logpath /var/log/mongod.log --dbpath /var/lib/mongodb`
 
 **Option B — MongoDB Atlas (cloud, no local install required):**
 

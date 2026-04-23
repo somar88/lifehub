@@ -3,6 +3,10 @@ process.env.JWT_SECRET = 'test-secret-key';
 // Hoisted mocks — apply to all requires in this file
 jest.mock('jsonwebtoken');
 jest.mock('../../src/middleware/tokenBlacklist');
+jest.mock('../../src/models/RevokedToken', () => ({
+  create: jest.fn().mockResolvedValue({}),
+  find: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+}));
 
 const jwt = require('jsonwebtoken');
 const { isRevoked } = require('../../src/middleware/tokenBlacklist');
@@ -24,6 +28,7 @@ function mockReq(overrides = {}) {
 
 describe('tokenBlacklist', () => {
   const blacklist = jest.requireActual('../../src/middleware/tokenBlacklist');
+  const RevokedToken = require('../../src/models/RevokedToken');
 
   it('isRevoked returns false for an unknown JTI', () => {
     expect(blacklist.isRevoked('tb-unknown-001')).toBe(false);
@@ -37,6 +42,29 @@ describe('tokenBlacklist', () => {
   it('revoking one JTI does not affect other JTIs', () => {
     blacklist.revoke('tb-x-001');
     expect(blacklist.isRevoked('tb-y-001')).toBe(false);
+  });
+
+  it('revoke() persists the JTI to MongoDB', () => {
+    blacklist.revoke('tb-persist-001', 9999999999);
+    expect(RevokedToken.create).toHaveBeenCalledWith(
+      expect.objectContaining({ jti: 'tb-persist-001' })
+    );
+  });
+
+  it('revoke() uses a 7-day default expiry when no exp is provided', () => {
+    const before = Date.now();
+    blacklist.revoke('tb-persist-002');
+    const call = RevokedToken.create.mock.calls.find(c => c[0].jti === 'tb-persist-002');
+    const expiresAt = call[0].expiresAt.getTime();
+    expect(expiresAt).toBeGreaterThan(before + 6 * 24 * 60 * 60 * 1000);
+  });
+
+  it('loadBlacklist() hydrates the in-memory Set from persisted tokens', async () => {
+    RevokedToken.find.mockReturnValueOnce({
+      lean: jest.fn().mockResolvedValue([{ jti: 'tb-hydrated-001' }]),
+    });
+    await blacklist.loadBlacklist();
+    expect(blacklist.isRevoked('tb-hydrated-001')).toBe(true);
   });
 });
 
