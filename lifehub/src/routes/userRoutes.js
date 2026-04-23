@@ -18,7 +18,7 @@ router.post('/me/password', auth, [
 ], changePassword);
 
 router.patch('/me/email', auth, [
-  body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('email').isEmail().withMessage('Valid email is required').normalizeEmail({ gmail_remove_dots: false }),
   body('currentPassword').notEmpty().withMessage('Password is required to change email'),
 ], changeEmail);
 

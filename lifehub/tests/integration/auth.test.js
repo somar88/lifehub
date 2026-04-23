@@ -154,6 +154,20 @@ describe('Auth Routes', () => {
       expect(res.statusCode).toBe(401);
       expect(res.body.error).toContain('deactivated');
     });
+
+    it('logs in successfully with a dotted Gmail address (regression: BUG-1)', async () => {
+      await request(app).post('/api/auth/register').send({
+        name: 'Dot User',
+        email: 'first.last@gmail.com',
+        password: 'password123',
+      });
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'first.last@gmail.com',
+        password: 'password123',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.token).toBeDefined();
+    });
   });
 
   // ── Forgot Password ──────────────────────────────────────────────────────

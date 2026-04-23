@@ -13,7 +13,7 @@ router.get('/config/email', adminController.getEmailConfig);
 
 router.put('/config/email', [
   body('provider').isIn(['gmail-smtp', 'gmail-oauth2']).withMessage('Provider must be gmail-smtp or gmail-oauth2'),
-  body('user').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('user').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
 ], adminController.updateEmailConfig);
 
 router.post('/config/email/test', adminController.testEmail);
@@ -22,7 +22,7 @@ router.get('/users', adminController.listUsers);
 
 router.post('/users', [
   body('name').notEmpty().trim().withMessage('Name is required'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
   body('role').optional().isIn(['user', 'admin']).withMessage('Role must be user or admin'),
 ], adminController.createUser);
 

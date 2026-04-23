@@ -5,7 +5,7 @@ const { listContacts, createContact, getContact, updateContact, toggleFavorite, 
 
 const idValidator = param('id').isMongoId().withMessage('Invalid contact ID');
 const firstNameValidator = body('firstName').trim().notEmpty().withMessage('First name is required').isLength({ max: 100 });
-const emailValidator = body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email').normalizeEmail();
+const emailValidator = body('email').optional({ checkFalsy: true }).isEmail().withMessage('Invalid email').normalizeEmail({ gmail_remove_dots: false });
 
 router.use(auth);
 

@@ -42,17 +42,17 @@ const applyLimiter = rateLimit({
 
 router.post('/register', testOnly, [
   body('name').notEmpty().trim().withMessage('Name is required'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
 ], authController.register);
 
 router.post('/login', loginLimiter, [
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
   body('password').notEmpty().withMessage('Password is required'),
 ], authController.login);
 
 router.post('/forgot-password', forgotPasswordLimiter, [
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
 ], authController.forgotPassword);
 
 router.post('/reset-password', [
@@ -63,7 +63,7 @@ router.post('/reset-password', [
 router.post('/apply', applyLimiter, [
   body('firstName').notEmpty().trim().withMessage('First name is required'),
   body('lastName').optional().trim(),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
 ], authController.apply);
 
 router.get('/verify-invite', [
