@@ -27,17 +27,26 @@ The fastest way to run LifeHub is with Docker Compose. This starts MongoDB, the 
 ```bash
 # 1. Copy and fill in secrets
 cp .env.example .env
-nano .env   # set JWT_SECRET (64 random chars) and any email/Telegram values
+nano .env   # set JWT_SECRET and ENCRYPTION_KEY at minimum
 
 # 2. Start all services
-docker-compose up -d
+docker compose up -d
 
 # 3. Watch the API start up
-docker-compose logs -f api
+docker compose logs -f api
 
 # 4. Verify
 curl http://localhost:3000/health
 # → {"status":"ok","timestamp":"..."}
+
+# 5a. Create first admin (interactive wizard — recommended)
+docker compose exec -it api node scripts/provision.js
+
+# 5b. Or non-interactively (CI / automated setup)
+docker compose exec api node scripts/create-admin.js \
+  --email admin@example.com \
+  --password yourpassword \
+  --name "Admin"
 ```
 
 - API:    http://localhost:3000

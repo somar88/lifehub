@@ -39,20 +39,60 @@ cp "$CLIENT_SRC/style.css"  "$DIST/client/"
 cp "$CLIENT_SRC/utils.js"   "$DIST/client/"
 cp "$CLIENT_SRC/config.js"  "$DIST/client/"
 
-# Keep the DEPLOY.md guide (written once, not from source)
-if [ ! -f "$DIST/client/DEPLOY.md" ]; then
-  echo "  ⚠  client/DEPLOY.md not found — please restore it from git."
-fi
 
 # ── Root files ────────────────────────────────────────────────────────────────
-echo "  → Copying root files..."
-cp "$SCRIPT_DIR/docker-compose.yml" "$DIST/"
-cp "$SCRIPT_DIR/.env.example"       "$DIST/"
+echo "  → Generating dist docker-compose.yml (dist-specific paths)..."
+cat > "$DIST/docker-compose.yml" << 'EOF'
+version: '3.9'
 
-# Keep the top-level README.md (written once, not from source)
-if [ ! -f "$DIST/README.md" ]; then
-  echo "  ⚠  dist/README.md not found — please restore it from git."
-fi
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: lifehub
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/lifehub
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
+      TELEGRAM_USE_POLLING: ${TELEGRAM_USE_POLLING:-false}
+    depends_on:
+      - mongo
+
+  client:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./client:/usr/share/nginx/html:ro
+
+volumes:
+  mongo_data:
+EOF
+
+echo "  → Copying .env.example..."
+cp "$SCRIPT_DIR/.env.example" "$DIST/"
+
+echo "  → Copying README.md..."
+cp "$SCRIPT_DIR/dist-readme.md" "$DIST/README.md"
 
 echo ""
 echo "Done. Deployment package is in: $DIST"
