@@ -1,0 +1,14 @@
+{
+  "name": "lifehub-client",
+  "version": "1.0.0",
+  "description": "LifeHub web client",
+  "scripts": {
+    "start": "npx serve -l 8080 .",
+    "dev": "npx live-server --port=8080 .",
+    "test": "jest",
+    "test:watch": "jest --watchAll"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

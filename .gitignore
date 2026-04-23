@@ -1,0 +1,6 @@
+.env
+*.zip
+dist/
+node_modules/
+logs/*.log
+coverage/

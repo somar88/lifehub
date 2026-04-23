@@ -1,0 +1,1062 @@
+openapi: 3.0.3
+info:
+  title: LifeHub API
+  version: 1.0.0
+  description: Personal life management API — tasks, events, contacts, budget, shopping, Telegram bot.
+servers:
+  - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:      { type: string }
+        name:     { type: string }
+        email:    { type: string }
+        role:     { type: string, enum: [user, admin] }
+        status:   { type: string, enum: [pending, invited, active, inactive] }
+        createdAt: { type: string, format: date-time }
+
+    Task:
+      type: object
+      properties:
+        _id:       { type: string }
+        title:     { type: string }
+        status:    { type: string, enum: [todo, in-progress, done] }
+        priority:  { type: string, enum: [low, medium, high] }
+        dueDate:   { type: string, format: date-time, nullable: true }
+        notes:     { type: string }
+        tags:      { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+
+    Event:
+      type: object
+      properties:
+        _id:               { type: string }
+        title:             { type: string }
+        description:       { type: string }
+        start:             { type: string, format: date-time }
+        end:               { type: string, format: date-time, nullable: true }
+        allDay:            { type: boolean }
+        location:          { type: string }
+        reminderMinutes:   { type: integer }
+        recurrence:        { type: string, enum: [none, daily, weekly, monthly] }
+        recurrenceGroupId: { type: string, nullable: true }
+        createdAt:         { type: string, format: date-time }
+
+    Contact:
+      type: object
+      properties:
+        _id:       { type: string }
+        firstName: { type: string }
+        lastName:  { type: string }
+        email:     { type: string }
+        phone:     { type: string }
+        company:   { type: string }
+        address:   { type: string }
+        notes:     { type: string }
+        tags:      { type: array, items: { type: string } }
+        favorite:  { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        _id:   { type: string }
+        name:  { type: string }
+        type:  { type: string, enum: [income, expense] }
+        color: { type: string }
+
+    Transaction:
+      type: object
+      properties:
+        _id:         { type: string }
+        amount:      { type: number }
+        type:        { type: string, enum: [income, expense] }
+        description: { type: string }
+        date:        { type: string, format: date-time }
+        categoryId:  { oneOf: [{ type: string }, { $ref: '#/components/schemas/Category' }], nullable: true }
+        createdAt:   { type: string, format: date-time }
+
+    ShoppingList:
+      type: object
+      properties:
+        _id:   { type: string }
+        name:  { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/ShoppingItem' } }
+        createdAt: { type: string, format: date-time }
+
+    ShoppingItem:
+      type: object
+      properties:
+        _id:      { type: string }
+        name:     { type: string }
+        quantity: { type: number }
+        unit:     { type: string }
+        checked:  { type: boolean }
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    ValidationError:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              msg:  { type: string }
+              path: { type: string }
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ── Auth ──────────────────────────────────────────────────────────────────────
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: JWT token + user object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:  { $ref: '#/components/schemas/User' }
+        '401': { description: Invalid credentials, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke current JWT
+      responses:
+        '200': { description: Logged out }
+        '401': { description: Unauthorized }
+
+  /api/auth/apply:
+    post:
+      tags: [Auth]
+      summary: Request a new account (admin approval required)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:  { type: string }
+                email: { type: string, format: email }
+      responses:
+        '201': { description: Application received }
+        '400': { description: Validation error }
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200': { description: Reset email sent (always 200 to prevent user enumeration) }
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using the token from the email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:    { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200': { description: Password changed }
+        '400': { description: Invalid or expired token }
+
+  /api/auth/verify-invite:
+    get:
+      tags: [Auth]
+      summary: Check if an invite token is valid and get user info
+      security: []
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+                  name:  { type: string }
+                  email: { type: string }
+        '400': { description: Invalid token }
+
+  /api/auth/accept-invite:
+    post:
+      tags: [Auth]
+      summary: Complete account setup from invite link
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:    { type: string }
+                password: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Account activated, JWT returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:  { $ref: '#/components/schemas/User' }
+        '400': { description: Invalid or expired token }
+
+  # ── Users ─────────────────────────────────────────────────────────────────────
+
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      responses:
+        '200': { description: User profile, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+    patch:
+      tags: [Users]
+      summary: Update current user profile (name)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        '200': { description: Updated user }
+    delete:
+      tags: [Users]
+      summary: Delete own account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200': { description: Account deleted }
+
+  /api/users/me/password:
+    post:
+      tags: [Users]
+      summary: Change password (returns new token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword:     { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Password changed, new token returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  token:   { type: string }
+
+  /api/users/me/email:
+    patch:
+      tags: [Users]
+      summary: Change email address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200': { description: Email updated }
+
+  # ── Tasks ─────────────────────────────────────────────────────────────────────
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks (paginated, filterable)
+      parameters:
+        - { name: status,   in: query, schema: { type: string, enum: [todo, in-progress, done] } }
+        - { name: priority, in: query, schema: { type: string, enum: [low, medium, high] } }
+        - { name: page,     in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,    in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Paginated tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks: { type: array, items: { $ref: '#/components/schemas/Task' } }
+                  total: { type: integer }
+                  page:  { type: integer }
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:    { type: string }
+                status:   { type: string, enum: [todo, in-progress, done] }
+                priority: { type: string, enum: [low, medium, high] }
+                dueDate:  { type: string, format: date-time }
+                notes:    { type: string }
+                tags:     { type: array, items: { type: string } }
+      responses:
+        '201': { description: Created task, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '400': { description: Validation error }
+
+  /api/tasks/stats:
+    get:
+      tags: [Tasks]
+      summary: Get task statistics (counts by status/priority)
+      responses:
+        '200': { description: Stats object }
+
+  /api/tasks/export:
+    get:
+      tags: [Tasks]
+      summary: Export tasks as CSV or JSON
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200': { description: CSV or JSON file }
+
+  /api/tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Tasks]
+      summary: Get a task by ID
+      responses:
+        '200': { description: Task, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+        '404': { description: Not found }
+    patch:
+      tags: [Tasks]
+      summary: Update a task
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:    { type: string }
+                status:   { type: string, enum: [todo, in-progress, done] }
+                priority: { type: string, enum: [low, medium, high] }
+                dueDate:  { type: string, format: date-time }
+                notes:    { type: string }
+      responses:
+        '200': { description: Updated task }
+        '404': { description: Not found }
+    delete:
+      tags: [Tasks]
+      summary: Delete a task
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  /api/tasks/{id}/duplicate:
+    post:
+      tags: [Tasks]
+      summary: Duplicate a task
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '201': { description: Duplicated task }
+
+  # ── Calendar ──────────────────────────────────────────────────────────────────
+
+  /api/calendar:
+    get:
+      tags: [Calendar]
+      summary: List events (paginated, filterable)
+      parameters:
+        - { name: from,   in: query, schema: { type: string, format: date } }
+        - { name: to,     in: query, schema: { type: string, format: date } }
+        - { name: allDay, in: query, schema: { type: boolean } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page,   in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,  in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200':
+          description: Paginated events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: '#/components/schemas/Event' } }
+                  total:  { type: integer }
+    post:
+      tags: [Calendar]
+      summary: Create an event (optionally recurring)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, start]
+              properties:
+                title:          { type: string }
+                description:    { type: string }
+                start:          { type: string, format: date-time }
+                end:            { type: string, format: date-time }
+                allDay:         { type: boolean }
+                location:       { type: string }
+                reminderMinutes: { type: integer }
+                recurrence:     { type: string, enum: [none, daily, weekly, monthly] }
+                recurrenceEnd:  { type: string, format: date }
+      responses:
+        '201': { description: Created event (first instance for recurring) }
+        '400': { description: Validation error }
+
+  /api/calendar/upcoming:
+    get:
+      tags: [Calendar]
+      summary: Get upcoming events from now
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 5, maximum: 50 } }
+      responses:
+        '200': { description: Array of events }
+
+  /api/calendar/export:
+    get:
+      tags: [Calendar]
+      summary: Export events as CSV or JSON
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200': { description: CSV or JSON file }
+
+  /api/calendar/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Calendar]
+      summary: Get an event by ID
+      responses:
+        '200': { description: Event, content: { application/json: { schema: { $ref: '#/components/schemas/Event' } } } }
+        '404': { description: Not found }
+    patch:
+      tags: [Calendar]
+      summary: Update an event
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:           { type: string }
+                description:     { type: string }
+                start:           { type: string, format: date-time }
+                end:             { type: string, format: date-time }
+                allDay:          { type: boolean }
+                location:        { type: string }
+                reminderMinutes: { type: integer }
+      responses:
+        '200': { description: Updated event }
+        '404': { description: Not found }
+    delete:
+      tags: [Calendar]
+      summary: Delete an event (optionally all instances in recurring series)
+      parameters:
+        - { name: all, in: query, schema: { type: boolean }, description: "Set true to delete all events in the recurrence group" }
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  # ── Contacts ──────────────────────────────────────────────────────────────────
+
+  /api/contacts:
+    get:
+      tags: [Contacts]
+      summary: List contacts (paginated, searchable)
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: tag,    in: query, schema: { type: string } }
+        - { name: sortBy, in: query, schema: { type: string, enum: [firstName, lastName, company] } }
+        - { name: order,  in: query, schema: { type: string, enum: [asc, desc] } }
+        - { name: page,   in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,  in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Paginated contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
+                  total:    { type: integer }
+    post:
+      tags: [Contacts]
+      summary: Create a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName]
+              properties:
+                firstName: { type: string }
+                lastName:  { type: string }
+                email:     { type: string, format: email }
+                phone:     { type: string }
+                company:   { type: string }
+                address:   { type: string }
+                notes:     { type: string }
+                tags:      { type: array, items: { type: string } }
+      responses:
+        '201': { description: Created contact }
+        '400': { description: Validation error }
+
+  /api/contacts/export:
+    get:
+      tags: [Contacts]
+      summary: Export contacts as CSV or JSON
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200': { description: CSV or JSON file }
+
+  /api/contacts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Contacts]
+      summary: Get a contact by ID
+      responses:
+        '200': { description: Contact, content: { application/json: { schema: { $ref: '#/components/schemas/Contact' } } } }
+        '404': { description: Not found }
+    patch:
+      tags: [Contacts]
+      summary: Update a contact
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                lastName:  { type: string }
+                email:     { type: string, format: email }
+                phone:     { type: string }
+                company:   { type: string }
+                address:   { type: string }
+                notes:     { type: string }
+                tags:      { type: array, items: { type: string } }
+      responses:
+        '200': { description: Updated contact }
+        '404': { description: Not found }
+    delete:
+      tags: [Contacts]
+      summary: Delete a contact
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  /api/contacts/{id}/favorite:
+    patch:
+      tags: [Contacts]
+      summary: Toggle favorite flag
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated contact with toggled favorite }
+        '404': { description: Not found }
+
+  # ── Budget ────────────────────────────────────────────────────────────────────
+
+  /api/budget/categories:
+    get:
+      tags: [Budget]
+      summary: List categories for current user
+      responses:
+        '200': { description: Array of categories, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Category' } } } } }
+    post:
+      tags: [Budget]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:  { type: string }
+                type:  { type: string, enum: [income, expense] }
+                color: { type: string }
+      responses:
+        '201': { description: Created category }
+        '400': { description: Validation error }
+
+  /api/budget/categories/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Budget]
+      summary: Get a category by ID
+      responses:
+        '200': { description: Category }
+        '404': { description: Not found }
+    patch:
+      tags: [Budget]
+      summary: Update a category
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:  { type: string }
+                color: { type: string }
+      responses:
+        '200': { description: Updated category }
+        '404': { description: Not found }
+    delete:
+      tags: [Budget]
+      summary: Delete a category (nullifies associated transactions)
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  /api/budget/transactions:
+    get:
+      tags: [Budget]
+      summary: List transactions (paginated, filterable)
+      parameters:
+        - { name: type,  in: query, schema: { type: string, enum: [income, expense] } }
+        - { name: from,  in: query, schema: { type: string, format: date } }
+        - { name: to,    in: query, schema: { type: string, format: date } }
+        - { name: page,  in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Paginated transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions: { type: array, items: { $ref: '#/components/schemas/Transaction' } }
+                  total: { type: integer }
+    post:
+      tags: [Budget]
+      summary: Create a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, type]
+              properties:
+                amount:      { type: number, minimum: 0 }
+                type:        { type: string, enum: [income, expense] }
+                description: { type: string }
+                date:        { type: string, format: date }
+                categoryId:  { type: string, nullable: true }
+      responses:
+        '201': { description: Created transaction }
+        '400': { description: Validation error }
+
+  /api/budget/transactions/export:
+    get:
+      tags: [Budget]
+      summary: Export transactions as CSV or JSON
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200': { description: CSV or JSON file }
+
+  /api/budget/transactions/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Budget]
+      summary: Get a transaction by ID
+      responses:
+        '200': { description: Transaction }
+        '404': { description: Not found }
+    patch:
+      tags: [Budget]
+      summary: Update a transaction
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:      { type: number, minimum: 0 }
+                type:        { type: string, enum: [income, expense] }
+                description: { type: string }
+                date:        { type: string, format: date }
+                categoryId:  { type: string, nullable: true }
+      responses:
+        '200': { description: Updated transaction }
+        '404': { description: Not found }
+    delete:
+      tags: [Budget]
+      summary: Delete a transaction
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  /api/budget/summary:
+    get:
+      tags: [Budget]
+      summary: Get income/expense summary with category breakdown
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to,   in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  income:     { type: object, properties: { total: { type: number }, count: { type: integer } } }
+                  expense:    { type: object, properties: { total: { type: number }, count: { type: integer } } }
+                  balance:    { type: number }
+                  byCategory: { type: array, items: { type: object, properties: { categoryName: { type: string }, total: { type: number }, count: { type: integer } } } }
+
+  # ── Shopping ──────────────────────────────────────────────────────────────────
+
+  /api/shopping:
+    get:
+      tags: [Shopping]
+      summary: List shopping lists
+      parameters:
+        - { name: page,  in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Paginated lists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lists: { type: array, items: { $ref: '#/components/schemas/ShoppingList' } }
+                  total: { type: integer }
+    post:
+      tags: [Shopping]
+      summary: Create a shopping list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201': { description: Created list }
+        '400': { description: Validation error }
+
+  /api/shopping/export:
+    get:
+      tags: [Shopping]
+      summary: Export all lists and items as CSV or JSON
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        '200': { description: CSV or JSON file }
+
+  /api/shopping/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Shopping]
+      summary: Get a shopping list by ID
+      responses:
+        '200': { description: Shopping list }
+        '404': { description: Not found }
+    patch:
+      tags: [Shopping]
+      summary: Rename a shopping list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '200': { description: Updated list }
+        '404': { description: Not found }
+    delete:
+      tags: [Shopping]
+      summary: Delete a shopping list
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+
+  /api/shopping/{id}/items:
+    post:
+      tags: [Shopping]
+      summary: Add an item to a shopping list
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:     { type: string }
+                quantity: { type: number, default: 1 }
+                unit:     { type: string }
+      responses:
+        '201': { description: Updated list with new item }
+        '404': { description: List not found }
+
+  /api/shopping/{id}/items/{itemId}:
+    parameters:
+      - { name: id,     in: path, required: true, schema: { type: string } }
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [Shopping]
+      summary: Update an item
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:     { type: string }
+                quantity: { type: number }
+                unit:     { type: string }
+      responses:
+        '200': { description: Updated list }
+        '404': { description: Item not found }
+    delete:
+      tags: [Shopping]
+      summary: Remove an item from the list
+      responses:
+        '200': { description: Updated list }
+        '404': { description: Item not found }
+
+  /api/shopping/{id}/items/{itemId}/toggle:
+    patch:
+      tags: [Shopping]
+      summary: Toggle item checked state
+      parameters:
+        - { name: id,     in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Updated list }
+        '404': { description: Item not found }
+
+  # ── Admin ─────────────────────────────────────────────────────────────────────
+
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users (admin only)
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: page,   in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,  in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Paginated users }
+        '403': { description: Forbidden }
+    post:
+      tags: [Admin]
+      summary: Create a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:  { type: string }
+                email: { type: string, format: email }
+      responses:
+        '201': { description: User created and invite email sent }
+
+  /api/admin/users/{id}/approve:
+    patch:
+      tags: [Admin]
+      summary: Approve a pending user application
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: User approved, invite email sent }
+        '404': { description: Not found }
+
+  /api/admin/users/{id}/reject:
+    patch:
+      tags: [Admin]
+      summary: Reject a pending user application
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: User rejected }
+        '404': { description: Not found }
+
+  /api/admin/users/{id}:
+    patch:
+      tags: [Admin]
+      summary: Update any user field (admin only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:   { type: string }
+                role:   { type: string, enum: [user, admin] }
+                status: { type: string, enum: [active, inactive] }
+      responses:
+        '200': { description: Updated user }
+        '404': { description: Not found }
+
+  /api/admin/system/status:
+    get:
+      tags: [Admin]
+      summary: Get system status (DB, uptime, etc.)
+      responses:
+        '200': { description: Status object }
+
+  /api/admin/config/email:
+    get:
+      tags: [Admin]
+      summary: Get email configuration
+      responses:
+        '200': { description: Email config (masked credentials) }
+    put:
+      tags: [Admin]
+      summary: Update email configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider: { type: string }
+                user:     { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Config saved }
+
+  /api/admin/config/email/test:
+    post:
+      tags: [Admin]
+      summary: Send a test email
+      responses:
+        '200': { description: Test email sent }
+
+  # ── Telegram ──────────────────────────────────────────────────────────────────
+
+  /api/telegram/link-code:
+    post:
+      tags: [Telegram]
+      summary: Generate a one-time code to link Telegram account
+      responses:
+        '201':
+          description: Link code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:      { type: string }
+                  expiresAt: { type: string, format: date-time }
+
+  /api/telegram/link:
+    delete:
+      tags: [Telegram]
+      summary: Unlink Telegram account
+      responses:
+        '200': { description: Telegram unlinked }

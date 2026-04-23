@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-server:
+    name: Server Tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    defaults:
+      run:
+        working-directory: lifehub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: lifehub/package-lock.json
+      - run: npm ci
+      - run: npm test
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/lifehub_test
+          JWT_SECRET: ci-test-secret-not-used-in-prod
+          GMAIL_USER: test@test.com
+          GMAIL_APP_PASSWORD: test
+          APP_URL: http://localhost:3000
+          TELEGRAM_BOT_TOKEN: dummy
+
+  test-client:
+    name: Client Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lifehub-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: lifehub-client/package-lock.json
+      - run: npm ci
+      - run: npm test

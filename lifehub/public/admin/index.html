@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LifeHub Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Login ──────────────────────────────────────────── -->
+  <div id="login-screen" class="login-screen hidden">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+      </div>
+      <h2>Admin Sign In</h2>
+      <div id="login-error" class="alert alert-error hidden"></div>
+      <form id="login-form">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="admin@example.com" required />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="login-btn">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── App Shell ──────────────────────────────────────── -->
+  <div id="app-shell" class="app-shell hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+        <span class="brand-badge">Admin</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-section="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </a>
+        <a href="#" class="nav-item" data-section="email">
+          <span class="nav-icon">✉</span> Email Config
+        </a>
+        <a href="#" class="nav-item" data-section="users">
+          <span class="nav-icon">◉</span> Users
+          <span id="nav-pending-badge" class="nav-badge hidden"></span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="sidebar-user-email" class="user-label"></span>
+        <button class="btn btn-ghost btn-sm" id="logout-btn">Sign out</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <!-- ── Dashboard ────────────────────────────────── -->
+      <section id="section-dashboard" class="section">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <button class="btn btn-ghost btn-sm" id="refresh-status-btn">↻ Refresh</button>
+        </div>
+
+        <div class="card-grid">
+          <div class="status-card" id="card-db">
+            <div class="status-icon">🗄</div>
+            <div class="status-body">
+              <div class="status-label">Database</div>
+              <div class="status-value" id="db-status">—</div>
+            </div>
+            <span class="status-dot" id="db-dot"></span>
+          </div>
+          <div class="status-card" id="card-email">
+            <div class="status-icon">✉</div>
+            <div class="status-body">
+              <div class="status-label">Email Service</div>
+              <div class="status-value" id="email-status">—</div>
+            </div>
+            <span class="status-dot" id="email-dot"></span>
+          </div>
+          <div class="status-card">
+            <div class="status-icon">◉</div>
+            <div class="status-body">
+              <div class="status-label">Total Users</div>
+              <div class="status-value" id="user-count">—</div>
+            </div>
+          </div>
+          <div class="status-card" id="card-pending">
+            <div class="status-icon">⏳</div>
+            <div class="status-body">
+              <div class="status-label">Pending Applications</div>
+              <div class="status-value" id="pending-count">—</div>
+            </div>
+          </div>
+          <div class="status-card">
+            <div class="status-icon">⏱</div>
+            <div class="status-body">
+              <div class="status-label">Server Uptime</div>
+              <div class="status-value" id="server-uptime">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Email Config ──────────────────────────────── -->
+      <section id="section-email" class="section hidden">
+        <div class="page-header">
+          <h1>Email Configuration</h1>
+        </div>
+
+        <div id="email-alert" class="alert hidden"></div>
+
+        <div class="card">
+          <div class="card-header">Provider Settings</div>
+          <div class="card-body">
+            <form id="email-form">
+              <div class="field">
+                <label>Provider</label>
+                <select id="email-provider">
+                  <option value="gmail-smtp">Gmail SMTP (App Password)</option>
+                  <option value="gmail-oauth2">Gmail OAuth2 (recommended)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Gmail Address</label>
+                <input type="email" id="email-user" placeholder="your-app@gmail.com" />
+              </div>
+
+              <!-- Gmail SMTP fields -->
+              <div id="smtp-fields">
+                <div class="field">
+                  <label>App Password <span class="field-hint">16-char code from Google Account → Security → App Passwords</span></label>
+                  <input type="password" id="email-password" placeholder="Leave blank to keep current" autocomplete="new-password" />
+                </div>
+              </div>
+
+              <!-- OAuth2 fields -->
+              <div id="oauth2-fields" class="hidden">
+                <div class="field">
+                  <label>Client ID</label>
+                  <input type="text" id="email-clientId" placeholder="From Google Cloud Console" />
+                </div>
+                <div class="field">
+                  <label>Client Secret <span class="field-hint">Stored encrypted</span></label>
+                  <input type="password" id="email-clientSecret" placeholder="Leave blank to keep current" autocomplete="new-password" />
+                </div>
+                <div class="field">
+                  <label>Refresh Token <span class="field-hint">Stored encrypted</span></label>
+                  <input type="password" id="email-refreshToken" placeholder="Leave blank to keep current" autocomplete="new-password" />
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+                <button type="button" class="btn btn-secondary" id="test-email-btn">Send Test Email</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Users ─────────────────────────────────────── -->
+      <section id="section-users" class="section hidden">
+        <div class="page-header">
+          <h1>Users</h1>
+          <button class="btn btn-primary btn-sm" id="create-user-btn">+ Create User</button>
+        </div>
+
+        <div id="users-alert" class="alert hidden"></div>
+
+        <!-- Filter tabs -->
+        <div class="tab-bar">
+          <button class="tab-btn active" data-filter="active">Active</button>
+          <button class="tab-btn" data-filter="pending">
+            Pending <span id="pending-badge" class="badge-count hidden"></span>
+          </button>
+          <button class="tab-btn" data-filter="invited">Invited</button>
+          <button class="tab-btn" data-filter="">All</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span id="users-tab-label">Active Users</span>
+            <span id="users-total" class="badge"></span>
+          </div>
+          <div class="card-body no-pad">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm" id="prev-page-btn">← Prev</button>
+            <span id="page-info" class="page-info"></span>
+            <button class="btn btn-ghost btn-sm" id="next-page-btn">Next →</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Create User Modal ──────────────────────────── -->
+  <div id="create-user-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create User</h3>
+        <button class="modal-close" id="create-user-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="create-user-alert" class="alert hidden"></div>
+        <form id="create-user-form">
+          <div class="field">
+            <label>Full Name</label>
+            <input type="text" id="cu-name" placeholder="Ada Lovelace" required />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="cu-email" placeholder="ada@example.com" required />
+          </div>
+          <div class="field">
+            <label>Role</label>
+            <select id="cu-role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create &amp; Send Invitation</button>
+            <button type="button" class="btn btn-ghost" id="create-user-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

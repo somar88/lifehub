@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LifeHub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Auth Screens ──────────────────────────────────── -->
+  <div id="auth-screen" class="auth-screen">
+
+    <!-- Login -->
+    <div id="view-login" class="auth-card">
+      <div class="auth-logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+      </div>
+      <h2>Sign in</h2>
+      <div id="login-alert" class="alert hidden"></div>
+      <form id="login-form">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" required />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="login-btn">Sign in</button>
+      </form>
+      <p class="auth-link">Don't have an account? <a href="#" id="go-apply">Apply for access</a></p>
+    </div>
+
+    <!-- Apply -->
+    <div id="view-apply" class="auth-card hidden">
+      <div class="auth-logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+      </div>
+      <h2>Request Access</h2>
+      <div id="apply-alert" class="alert hidden"></div>
+      <form id="apply-form">
+        <div class="field">
+          <label>First Name</label>
+          <input type="text" id="apply-firstname" placeholder="Ada" required />
+        </div>
+        <div class="field">
+          <label>Last Name <span class="field-hint">optional</span></label>
+          <input type="text" id="apply-lastname" placeholder="Lovelace" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="apply-email" placeholder="you@example.com" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="apply-btn">Submit Application</button>
+      </form>
+      <p class="auth-link"><a href="#" id="go-login">← Back to sign in</a></p>
+    </div>
+
+    <!-- Accept Invite -->
+    <div id="view-accept-invite" class="auth-card hidden">
+      <div class="auth-logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+      </div>
+      <h2>Complete Your Account</h2>
+      <div id="invite-alert" class="alert hidden"></div>
+      <div id="invite-meta" class="invite-meta hidden">
+        <p>Welcome, <strong id="invite-name"></strong>!</p>
+        <p class="text-muted" id="invite-email-display"></p>
+      </div>
+      <form id="invite-form">
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="invite-password" placeholder="At least 8 characters" required minlength="8" />
+        </div>
+        <div class="field">
+          <label>Confirm Password</label>
+          <input type="password" id="invite-confirm" placeholder="Repeat password" required />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="invite-btn">Set Password &amp; Sign In</button>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- ── App Shell ──────────────────────────────────────── -->
+  <div id="app-shell" class="app-shell hidden">
+
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">LifeHub</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-section="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </a>
+        <a href="#" class="nav-item" data-section="tasks">
+          <span class="nav-icon">✓</span> Tasks
+        </a>
+        <a href="#" class="nav-item" data-section="calendar">
+          <span class="nav-icon">📅</span> Calendar
+        </a>
+        <a href="#" class="nav-item" data-section="contacts">
+          <span class="nav-icon">◉</span> Contacts
+        </a>
+        <a href="#" class="nav-item" data-section="budget">
+          <span class="nav-icon">$</span> Budget
+        </a>
+        <a href="#" class="nav-item" data-section="shopping">
+          <span class="nav-icon">🛒</span> Shopping
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="sidebar-user-name" class="user-label"></span>
+        <a href="#" class="nav-item" data-section="profile">
+          <span class="nav-icon">⚙</span> Settings
+        </a>
+        <button class="btn btn-ghost btn-sm" id="logout-btn">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+
+      <!-- ── Dashboard ────────────────────────────────── -->
+      <section id="section-dashboard" class="section hidden">
+        <div class="page-header"><h1>Dashboard</h1></div>
+        <div class="card-grid" id="dash-stats"></div>
+        <div class="two-col">
+          <div>
+            <div class="card">
+              <div class="card-header">Upcoming Events</div>
+              <div class="card-body no-pad">
+                <ul id="dash-events" class="item-list"></ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header">Open Tasks</div>
+              <div class="card-body no-pad">
+                <ul id="dash-tasks" class="item-list"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Tasks ─────────────────────────────────────── -->
+      <section id="section-tasks" class="section hidden">
+        <div class="page-header">
+          <h1>Tasks</h1>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="exportSection('tasks')">Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="task-create-btn">+ New Task</button>
+          </div>
+        </div>
+        <div id="tasks-alert" class="alert hidden"></div>
+        <div class="filter-bar">
+          <select id="task-filter-status" class="filter-select">
+            <option value="">All statuses</option>
+            <option value="todo">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="task-filter-priority" class="filter-select">
+            <option value="">All priorities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="card-body no-pad">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Due</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tasks-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm" id="tasks-prev-btn">← Prev</button>
+            <span id="tasks-page-info" class="page-info"></span>
+            <button class="btn btn-ghost btn-sm" id="tasks-next-btn">Next →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Calendar ──────────────────────────────────── -->
+      <section id="section-calendar" class="section hidden">
+        <div class="page-header">
+          <h1>Calendar</h1>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="exportSection('calendar')">Export CSV</button>
+            <div class="view-toggle">
+              <button id="cal-view-list" class="btn btn-sm active" onclick="setCalView('list')">List</button>
+              <button id="cal-view-grid" class="btn btn-sm" onclick="setCalView('grid')">Grid</button>
+            </div>
+            <button class="btn btn-primary btn-sm" id="event-create-btn">+ New Event</button>
+          </div>
+        </div>
+        <div id="calendar-alert" class="alert hidden"></div>
+        <div id="cal-table-container" class="card">
+          <div class="card-body no-pad">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Reminder</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="calendar-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm" id="cal-prev-btn">← Prev</button>
+            <span id="cal-page-info" class="page-info"></span>
+            <button class="btn btn-ghost btn-sm" id="cal-next-btn">Next →</button>
+          </div>
+        </div>
+        <div id="cal-grid" class="hidden"></div>
+      </section>
+
+      <!-- ── Contacts ──────────────────────────────────── -->
+      <section id="section-contacts" class="section hidden">
+        <div class="page-header">
+          <h1>Contacts</h1>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="exportSection('contacts')">Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="contact-create-btn">+ New Contact</button>
+          </div>
+        </div>
+        <div id="contacts-alert" class="alert hidden"></div>
+        <div class="filter-bar">
+          <input type="text" id="contact-search" class="filter-input" placeholder="Search contacts…" />
+        </div>
+        <div class="card">
+          <div class="card-body no-pad">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Tags</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="contacts-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm" id="contacts-prev-btn">← Prev</button>
+            <span id="contacts-page-info" class="page-info"></span>
+            <button class="btn btn-ghost btn-sm" id="contacts-next-btn">Next →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Budget ─────────────────────────────────────── -->
+      <section id="section-budget" class="section hidden">
+        <div class="page-header">
+          <h1>Budget</h1>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="exportSection('budget/transactions')">Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="txn-create-btn">+ Add Transaction</button>
+          </div>
+        </div>
+        <div id="budget-alert" class="alert hidden"></div>
+        <div class="card-grid" id="budget-summary-cards"></div>
+        <div class="charts-row">
+          <div class="chart-box">
+            <h3>Spending by Category</h3>
+            <canvas id="chart-by-category" width="300" height="300"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>Income vs Expenses</h3>
+            <canvas id="chart-income-expense" width="300" height="200"></canvas>
+          </div>
+        </div>
+
+        <!-- Period selector -->
+        <div class="filter-bar">
+          <label class="filter-label">Period:</label>
+          <input type="month" id="budget-month" class="filter-input" />
+          <button class="btn btn-ghost btn-sm" id="budget-apply-period">Apply</button>
+          <button class="btn btn-secondary btn-sm" id="cat-manage-btn">Manage Categories</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Transactions</div>
+          <div class="card-body no-pad">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="budget-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost btn-sm" id="budget-prev-btn">← Prev</button>
+            <span id="budget-page-info" class="page-info"></span>
+            <button class="btn btn-ghost btn-sm" id="budget-next-btn">Next →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Shopping ──────────────────────────────────── -->
+      <section id="section-shopping" class="section hidden">
+        <div class="page-header">
+          <h1>Shopping Lists</h1>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="exportSection('shopping')">Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="list-create-btn">+ New List</button>
+          </div>
+        </div>
+        <div id="shopping-alert" class="alert hidden"></div>
+        <div id="shopping-lists-view">
+          <div id="shopping-lists-grid" class="lists-grid"></div>
+        </div>
+        <div id="shopping-items-view" class="hidden">
+          <div class="page-header" style="margin-top:1rem">
+            <h2 id="shopping-list-title"></h2>
+            <button class="btn btn-ghost btn-sm" id="back-to-lists-btn">← All Lists</button>
+          </div>
+          <div id="shopping-items-alert" class="alert hidden"></div>
+          <div class="card">
+            <div class="card-body no-pad">
+              <ul id="shopping-items-ul" class="item-list"></ul>
+            </div>
+            <div class="card-footer">
+              <input type="text" id="new-item-input" class="filter-input" placeholder="Add item…" style="flex:1" />
+              <button class="btn btn-primary btn-sm" id="add-item-btn">Add</button>
+              <button class="btn btn-danger btn-sm" id="delete-list-btn">Delete List</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Profile / Settings ────────────────────────── -->
+      <section id="section-profile" class="section hidden">
+        <div class="page-header"><h1>Settings</h1></div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="account">Account</button>
+          <button class="tab-btn" data-tab="telegram">Telegram</button>
+        </div>
+
+        <!-- Account Tab -->
+        <div id="tab-account">
+          <div id="profile-alert" class="alert hidden"></div>
+
+          <div class="card">
+            <div class="card-header">Profile</div>
+            <div class="card-body">
+              <form id="profile-name-form">
+                <div class="field">
+                  <label>Display Name</label>
+                  <input type="text" id="profile-name" required />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Save Name</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Change Email</div>
+            <div class="card-body">
+              <form id="profile-email-form">
+                <div class="field">
+                  <label>New Email</label>
+                  <input type="email" id="profile-new-email" required />
+                </div>
+                <div class="field">
+                  <label>Current Password</label>
+                  <input type="password" id="profile-email-password" required />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Update Email</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">Change Password</div>
+            <div class="card-body">
+              <form id="profile-password-form">
+                <div class="field">
+                  <label>Current Password</label>
+                  <input type="password" id="profile-current-password" required />
+                </div>
+                <div class="field">
+                  <label>New Password</label>
+                  <input type="password" id="profile-new-password" required minlength="8" />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Change Password</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header" style="color:var(--danger)">Danger Zone</div>
+            <div class="card-body">
+              <p class="text-muted" style="margin-bottom:1rem">Permanently delete your account and all data. This cannot be undone.</p>
+              <form id="profile-delete-form">
+                <div class="field">
+                  <label>Confirm your password</label>
+                  <input type="password" id="profile-delete-password" required />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-danger">Delete My Account</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telegram Tab -->
+        <div id="tab-telegram" class="hidden">
+          <div id="telegram-alert" class="alert hidden"></div>
+          <div class="card">
+            <div class="card-header">Telegram Integration</div>
+            <div class="card-body">
+              <div id="tg-linked-view" class="hidden">
+                <p style="margin-bottom:1rem">Your Telegram account is linked.</p>
+                <button class="btn btn-danger btn-sm" id="tg-unlink-btn">Unlink Telegram</button>
+              </div>
+              <div id="tg-unlinked-view" class="hidden">
+                <p class="text-muted" style="margin-bottom:1rem">Link your Telegram to receive notifications and control LifeHub from your phone.</p>
+                <button class="btn btn-primary btn-sm" id="tg-link-btn">Link Telegram</button>
+                <div id="tg-code-box" class="code-box hidden">
+                  <p style="margin-bottom:.5rem">Open the bot and send:</p>
+                  <code id="tg-code-text"></code>
+                  <p class="text-muted" style="margin-top:.5rem;font-size:.8rem">Code expires in 15 minutes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Task Modal ──────────────────────────────────── -->
+  <div id="task-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="task-modal-title">New Task</h3>
+        <button class="modal-close" id="task-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="task-modal-alert" class="alert hidden"></div>
+        <form id="task-modal-form">
+          <div class="field">
+            <label>Title</label>
+            <input type="text" id="tm-title" required />
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <textarea id="tm-description" rows="3"></textarea>
+          </div>
+          <div class="two-col-sm">
+            <div class="field">
+              <label>Status</label>
+              <select id="tm-status">
+                <option value="todo">To Do</option>
+                <option value="in-progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Priority</label>
+              <select id="tm-priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Due Date</label>
+            <input type="date" id="tm-dueDate" />
+          </div>
+          <div class="field">
+            <label>Tags <span class="field-hint">comma-separated</span></label>
+            <input type="text" id="tm-tags" placeholder="work, personal" />
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="task-modal-submit">Save</button>
+            <button type="button" class="btn btn-ghost" id="task-modal-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Event Modal ─────────────────────────────────── -->
+  <div id="event-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="event-modal-title">New Event</h3>
+        <button class="modal-close" id="event-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="event-modal-alert" class="alert hidden"></div>
+        <form id="event-modal-form">
+          <div class="field">
+            <label>Title</label>
+            <input type="text" id="em-title" required />
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <textarea id="em-description" rows="2"></textarea>
+          </div>
+          <div class="two-col-sm">
+            <div class="field">
+              <label>Start</label>
+              <input type="datetime-local" id="em-start" required />
+            </div>
+            <div class="field">
+              <label>End</label>
+              <input type="datetime-local" id="em-end" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Reminder <span class="field-hint">minutes before</span></label>
+            <input type="number" id="em-reminder" value="15" min="0" />
+          </div>
+          <div class="field">
+            <label>Recurrence</label>
+            <select id="em-recurrence" onchange="toggleRecurrenceEnd()">
+              <option value="none">None</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="field hidden" id="em-recurrence-end-group">
+            <label>Repeat until <span class="field-hint">optional</span></label>
+            <input type="date" id="em-recurrenceEnd" />
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="event-modal-submit">Save</button>
+            <button type="button" class="btn btn-ghost" id="event-modal-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Contact Modal ───────────────────────────────── -->
+  <div id="contact-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="contact-modal-title">New Contact</h3>
+        <button class="modal-close" id="contact-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="contact-modal-alert" class="alert hidden"></div>
+        <form id="contact-modal-form">
+          <div class="two-col-sm">
+            <div class="field">
+              <label>First Name</label>
+              <input type="text" id="cm-firstname" required />
+            </div>
+            <div class="field">
+              <label>Last Name</label>
+              <input type="text" id="cm-lastname" />
+            </div>
+          </div>
+          <div class="two-col-sm">
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="cm-email" />
+            </div>
+            <div class="field">
+              <label>Phone</label>
+              <input type="tel" id="cm-phone" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Tags <span class="field-hint">comma-separated</span></label>
+            <input type="text" id="cm-tags" />
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <textarea id="cm-notes" rows="2"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="contact-modal-submit">Save</button>
+            <button type="button" class="btn btn-ghost" id="contact-modal-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Transaction Modal ───────────────────────────── -->
+  <div id="txn-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="txn-modal-title">New Transaction</h3>
+        <button class="modal-close" id="txn-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="txn-modal-alert" class="alert hidden"></div>
+        <form id="txn-modal-form">
+          <div class="two-col-sm">
+            <div class="field">
+              <label>Type</label>
+              <select id="txm-type">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Amount</label>
+              <input type="number" id="txm-amount" step="0.01" min="0.01" required />
+            </div>
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <input type="text" id="txm-description" />
+          </div>
+          <div class="two-col-sm">
+            <div class="field">
+              <label>Category</label>
+              <select id="txm-category"></select>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="txm-date" required />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="txn-modal-submit">Save</button>
+            <button type="button" class="btn btn-ghost" id="txn-modal-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Shopping List Modal ─────────────────────────── -->
+  <div id="list-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="width:360px">
+      <div class="modal-header">
+        <h3>New Shopping List</h3>
+        <button class="modal-close" id="list-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="list-modal-alert" class="alert hidden"></div>
+        <form id="list-modal-form">
+          <div class="field">
+            <label>List Name</label>
+            <input type="text" id="lm-name" required placeholder="Groceries" />
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create List</button>
+            <button type="button" class="btn btn-ghost" id="list-modal-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Category Modal ──────────────────────────────── -->
+  <div id="cat-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="width:440px">
+      <div class="modal-header">
+        <h3>Manage Categories</h3>
+        <button class="modal-close" id="cat-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="cat-modal-alert" class="alert hidden"></div>
+        <ul id="cat-list" class="item-list" style="margin-bottom:1rem"></ul>
+        <form id="cat-add-form" style="display:flex;gap:.5rem">
+          <input type="text" id="cat-name-input" class="filter-input" style="flex:1" placeholder="New category name" required />
+          <button type="submit" class="btn btn-primary btn-sm">Add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
