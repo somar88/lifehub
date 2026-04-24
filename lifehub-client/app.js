@@ -54,14 +54,14 @@ function showAlert(containerId, message, type = 'error') {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function login(email, password) {
-  const data = await api('POST', '/api/auth/login', { email, password });
+  const data = await api('POST', '/api/auth/login', { email: email.trim(), password });
   token = data.token;
   currentUser = data.user;
   localStorage.setItem(TOKEN_KEY, token);
 }
 
 function logout() {
-  api('POST', '/auth/logout').catch(() => {});
+  api('POST', '/api/auth/logout').catch(() => {});
   token = null;
   currentUser = null;
   localStorage.removeItem(TOKEN_KEY);

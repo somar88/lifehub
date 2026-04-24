@@ -1,23 +1,34 @@
 'use strict';
 const RevokedToken = require('../models/RevokedToken');
 
-const blacklist = new Set();
+const blacklist = new Map(); // jti -> expiresAt (ms timestamp)
 
 function revoke(jti, expUnixSec) {
-  blacklist.add(jti);
   const expiresAt = expUnixSec
-    ? new Date(expUnixSec * 1000)
-    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  RevokedToken.create({ jti, expiresAt }).catch(() => {});
+    ? expUnixSec * 1000
+    : Date.now() + 7 * 24 * 60 * 60 * 1000;
+  blacklist.set(jti, expiresAt);
+  RevokedToken.create({ jti, expiresAt: new Date(expiresAt) }).catch(() => {});
 }
 
 function isRevoked(jti) {
-  return blacklist.has(jti);
+  const exp = blacklist.get(jti);
+  if (exp === undefined) return false;
+  if (Date.now() > exp) { blacklist.delete(jti); return false; }
+  return true;
 }
 
 async function loadBlacklist() {
   const tokens = await RevokedToken.find({ expiresAt: { $gt: new Date() } }).lean();
-  for (const t of tokens) blacklist.add(t.jti);
+  for (const t of tokens) blacklist.set(t.jti, t.expiresAt.getTime());
 }
+
+// Prune expired entries from memory every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [jti, exp] of blacklist) {
+    if (now > exp) blacklist.delete(jti);
+  }
+}, 60 * 60 * 1000).unref();
 
 module.exports = { revoke, isRevoked, loadBlacklist };

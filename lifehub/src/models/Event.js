@@ -21,5 +21,6 @@ const eventSchema = new mongoose.Schema(
 
 eventSchema.index({ userId: 1, start: 1 });
 eventSchema.index({ userId: 1, end: 1 });
+eventSchema.index({ userId: 1, reminderSent: 1, start: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

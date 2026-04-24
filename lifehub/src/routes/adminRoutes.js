@@ -1,10 +1,17 @@
 const express = require('express');
 const { body } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const requireAdmin = require('../middleware/requireAdmin');
 const adminController = require('../controllers/adminController');
 const { emailBody } = require('./validators');
 
 const router = express.Router();
+
+const emailTestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Too many test emails. Please wait a minute.' },
+});
 
 router.use(requireAdmin);
 
@@ -17,7 +24,7 @@ router.put('/config/email', [
   emailBody('user'),
 ], adminController.updateEmailConfig);
 
-router.post('/config/email/test', adminController.testEmail);
+router.post('/config/email/test', emailTestLimiter, adminController.testEmail);
 
 router.get('/users', adminController.listUsers);
 

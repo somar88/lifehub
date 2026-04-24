@@ -191,6 +191,34 @@ describe('Tasks API', () => {
         .send({ status: 'flying' });
       expect(res.statusCode).toBe(400);
     });
+
+    it('resets dueDateReminderSent when dueDate is changed', async () => {
+      const task = await Task.create({
+        userId: userA._id, title: 'Reminder task',
+        dueDate: new Date('2026-05-01'), dueDateReminderSent: true,
+      });
+      const res = await request(app)
+        .patch(`/api/tasks/${task._id}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ dueDate: '2026-06-01' });
+      expect(res.statusCode).toBe(200);
+      const updated = await Task.findById(task._id);
+      expect(updated.dueDateReminderSent).toBe(false);
+    });
+
+    it('resets dueDateReminderSent when status changes from done back to todo', async () => {
+      const task = await Task.create({
+        userId: userA._id, title: 'Reopen task',
+        status: 'done', dueDateReminderSent: true,
+      });
+      const res = await request(app)
+        .patch(`/api/tasks/${task._id}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ status: 'todo' });
+      expect(res.statusCode).toBe(200);
+      const updated = await Task.findById(task._id);
+      expect(updated.dueDateReminderSent).toBe(false);
+    });
   });
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -317,6 +345,13 @@ describe('Tasks API', () => {
         .set('Authorization', `Bearer ${tokenA}`);
       expect(res.statusCode).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('returns 400 for unsupported format', async () => {
+      const res = await request(app)
+        .get('/api/tasks/export?format=xml')
+        .set('Authorization', `Bearer ${tokenA}`);
+      expect(res.statusCode).toBe(400);
     });
   });
 });

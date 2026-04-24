@@ -103,6 +103,10 @@ async function updateTask(req, res, next) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
+    if (updates.dueDate !== undefined || (updates.status && updates.status !== 'done')) {
+      updates.dueDateReminderSent = false;
+    }
+
     const task = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
       updates,
@@ -156,12 +160,14 @@ module.exports = { listTasks, getTaskStats, createTask, getTask, updateTask, dup
 
 async function exportTasks(req, res, next) {
   try {
+    const format = req.query.format || 'csv';
+    if (!['json', 'csv'].includes(format)) return res.status(400).json({ error: 'Format must be json or csv' });
     const tasks = await Task.find({ userId: req.user.userId }).lean();
-    if (req.query.format === 'json') {
+    if (format === 'json') {
       res.setHeader('Content-Disposition', 'attachment; filename="tasks.json"');
       return res.json(tasks);
     }
-    const fields = ['title', 'status', 'priority', 'dueDate', 'notes', 'createdAt'];
+    const fields = ['title', 'status', 'priority', 'dueDate', 'description', 'createdAt'];
     const csv = [
       fields.join(','),
       ...tasks.map(t => fields.map(f => JSON.stringify(t[f] ?? '')).join(',')),

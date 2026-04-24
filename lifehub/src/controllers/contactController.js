@@ -125,8 +125,10 @@ module.exports = { listContacts, createContact, getContact, updateContact, toggl
 
 async function exportContacts(req, res, next) {
   try {
+    const format = req.query.format || 'csv';
+    if (!['json', 'csv'].includes(format)) return res.status(400).json({ error: 'Format must be json or csv' });
     const contacts = await Contact.find({ userId: req.user.userId }).lean();
-    if (req.query.format === 'json') {
+    if (format === 'json') {
       res.setHeader('Content-Disposition', 'attachment; filename="contacts.json"');
       return res.json(contacts);
     }

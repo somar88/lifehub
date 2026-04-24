@@ -31,7 +31,7 @@ function decrypt(ciphertext) {
   const authTag = Buffer.from(tagB64, 'base64');
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
-  return decipher.update(encrypted) + decipher.final('utf8');
+  return decipher.update(encrypted, null, 'utf8') + decipher.final('utf8');
 }
 
 module.exports = { encrypt, decrypt };

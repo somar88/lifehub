@@ -159,8 +159,10 @@ module.exports = {
 
 async function exportShopping(req, res, next) {
   try {
+    const format = req.query.format || 'csv';
+    if (!['json', 'csv'].includes(format)) return res.status(400).json({ error: 'Format must be json or csv' });
     const lists = await ShoppingList.find({ userId: req.user.userId }).lean();
-    if (req.query.format === 'json') {
+    if (format === 'json') {
       res.setHeader('Content-Disposition', 'attachment; filename="shopping.json"');
       return res.json(lists);
     }

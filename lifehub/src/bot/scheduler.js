@@ -13,6 +13,7 @@ async function eventReminders(bot) {
     });
 
     for (const event of events) {
+      if (event.reminderSent) continue;
       const user = await User.findById(event.userId);
       if (!user) continue;
       const minsUntil = Math.round((event.start - now) / 60000);
@@ -47,6 +48,7 @@ async function taskReminders(bot) {
     });
 
     for (const task of tasks) {
+      if (task.dueDateReminderSent) continue;
       const user = await User.findById(task.userId);
       if (!user) continue;
       try {
@@ -110,10 +112,19 @@ async function dailyDigests(bot) {
 }
 
 function startScheduler(bot) {
+  let consecutiveFailures = 0;
   setInterval(async () => {
-    await eventReminders(bot);
-    await taskReminders(bot);
-    await dailyDigests(bot);
+    try {
+      await eventReminders(bot);
+      await taskReminders(bot);
+      await dailyDigests(bot);
+      consecutiveFailures = 0;
+    } catch (err) {
+      consecutiveFailures++;
+      if (consecutiveFailures === 1 || consecutiveFailures % 10 === 0) {
+        logger.error('Scheduler top-level error', { error: err.message, consecutiveFailures });
+      }
+    }
   }, 60 * 1000);
 }
 

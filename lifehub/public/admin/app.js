@@ -57,6 +57,7 @@ async function login(email, password) {
 }
 
 function logout() {
+  api('POST', '/api/auth/logout').catch(() => {});
   token = null;
   currentUser = null;
   sessionStorage.removeItem('lh_token');

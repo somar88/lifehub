@@ -5,6 +5,7 @@ const itemSchema = new mongoose.Schema({
   quantity: { type: Number, default: 1, min: 0 },
   unit: { type: String, trim: true, maxlength: 50, default: '' },
   checked: { type: Boolean, default: false },
+  addedAt: { type: Date, default: Date.now },
 });
 
 const shoppingListSchema = new mongoose.Schema(

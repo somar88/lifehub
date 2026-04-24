@@ -312,6 +312,8 @@ curl -s -X PATCH http://your-server:3000/api/users/me \
 
 Valid values: `0`–`23`. Default is `8` (8am). You can also set this from the Telegram bot with `/digest 7`.
 
+> **Note on timezones:** The hour is interpreted in the **server's local time**. If your server runs in UTC, `/digest 8` means 8 AM UTC — adjust accordingly for your timezone.
+
 ---
 
 ## 5. Tasks
@@ -444,7 +446,11 @@ curl -s "http://your-server:3000/api/tasks/export?format=json" \
   -H "Authorization: Bearer $TOKEN" -o tasks.json
 ```
 
-Fields exported: `title`, `status`, `priority`, `dueDate`, `notes`, `createdAt`.
+Fields exported: `title`, `status`, `priority`, `dueDate`, `description`, `createdAt`.
+
+> **Note:** Only `csv` (default) and `json` are accepted as format values. Any other value returns `400 Bad Request`.
+
+> **Tip:** If you complete a task and later reopen it (change status back to `todo` or `in-progress`), the due date reminder will automatically fire again on the due date.
 
 ---
 
@@ -467,6 +473,8 @@ curl -s -X POST http://your-server:3000/api/calendar \
 ```
 
 `reminderMinutes` sets how many minutes before the event start a reminder is sent — via Telegram if your account is linked, via email otherwise (default: 15). Set to `0` to disable reminders for a specific event.
+
+> **Tip:** If you reschedule an event (change its `start` time or `reminderMinutes`), the reminder resets automatically and will fire again at the new time.
 
 **All-day event:**
 
@@ -608,6 +616,8 @@ curl -s "http://your-server:3000/api/calendar/export?format=json" \
 ```
 
 Fields exported: `title`, `start`, `end`, `location`, `description`, `reminderMinutes`, `createdAt`.
+
+> **Note:** Only `csv` (default) and `json` are accepted as format values. Any other value returns `400 Bad Request`.
 
 ---
 
@@ -1103,8 +1113,10 @@ The scheduler sends proactive notifications without any command. If your Telegra
 
 | Notification | Trigger |
 |---|---|
-| **Event reminder** | Sent N minutes before an event starts, where N is the event's `reminderMinutes` field (default: 15) |
-| **Task due today** | Sent once on the day a task's due date arrives (only for non-done tasks) |
+| **Event reminder** | Sent N minutes before an event starts, where N is the event's `reminderMinutes` field (default: 15). Resets automatically if you reschedule the event. |
+| **Task due today** | Sent once on the day a task's due date arrives (only for non-done tasks). Resets if you reopen a completed task, so you get reminded again. |
 | **Daily digest** | Sent at your configured `dailyDigestHour` — shows open task count and today's events |
 
 Set the reminder time per event when creating or editing it (API field: `reminderMinutes`, bot syntax: `remind <N>m`). Set your daily digest hour with `/digest <hour>` or via the profile API.
+
+> **Note on timezones:** The daily digest hour is relative to the **server's local time**, not yours. If the server runs in UTC, setting `dailyDigestHour: 8` means 8 AM UTC. Ask your admin for the server timezone if it matters.

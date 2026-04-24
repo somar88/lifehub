@@ -40,4 +40,6 @@ userSchema.methods.toJSON = function () {
   return obj;
 };
 
+userSchema.index({ dailyDigestHour: 1, lastDigestDate: 1 });
+
 module.exports = mongoose.model('User', userSchema);

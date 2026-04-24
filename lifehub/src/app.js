@@ -18,7 +18,10 @@ const telegramRoutes = require('./routes/telegramRoutes');
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+const corsOrigin = process.env.CLIENT_URL ||
+  (process.env.NODE_ENV === 'production' ? null : '*');
+if (!corsOrigin) throw new Error('CLIENT_URL must be set in production');
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);

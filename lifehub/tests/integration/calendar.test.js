@@ -212,6 +212,20 @@ describe('Calendar API', () => {
         .send({ start: 'not-a-date' });
       expect(res.statusCode).toBe(400);
     });
+
+    it('resets reminderSent when start time is changed', async () => {
+      const event = await Event.create({
+        userId: userA._id, title: 'Rescheduled',
+        start: new Date('2026-05-01T10:00:00Z'), reminderSent: true,
+      });
+      const res = await request(app)
+        .patch(`/api/calendar/${event._id}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ start: '2026-06-15T10:00:00Z' });
+      expect(res.statusCode).toBe(200);
+      const updated = await Event.findById(event._id);
+      expect(updated.reminderSent).toBe(false);
+    });
   });
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -337,6 +351,13 @@ describe('Calendar API', () => {
         .set('Authorization', `Bearer ${tokenA}`);
       expect(res.statusCode).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('returns 400 for unsupported format', async () => {
+      const res = await request(app)
+        .get('/api/calendar/export?format=xml')
+        .set('Authorization', `Bearer ${tokenA}`);
+      expect(res.statusCode).toBe(400);
     });
   });
 

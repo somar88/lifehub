@@ -4,8 +4,8 @@ const Transaction = require('../../models/Transaction');
 function currentMonth() {
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  return { start: new Date(`${y}-${m}-01`), end: new Date(`${y}-${m}-31T23:59:59`) };
+  const m = now.getMonth();
+  return { start: new Date(Date.UTC(y, m, 1)), end: new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)) };
 }
 
 function register(bot) {

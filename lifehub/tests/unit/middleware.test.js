@@ -59,9 +59,10 @@ describe('tokenBlacklist', () => {
     expect(expiresAt).toBeGreaterThan(before + 6 * 24 * 60 * 60 * 1000);
   });
 
-  it('loadBlacklist() hydrates the in-memory Set from persisted tokens', async () => {
+  it('loadBlacklist() hydrates the in-memory Map from persisted tokens', async () => {
+    const futureExpiry = new Date(Date.now() + 86400000);
     RevokedToken.find.mockReturnValueOnce({
-      lean: jest.fn().mockResolvedValue([{ jti: 'tb-hydrated-001' }]),
+      lean: jest.fn().mockResolvedValue([{ jti: 'tb-hydrated-001', expiresAt: futureExpiry }]),
     });
     await blacklist.loadBlacklist();
     expect(blacklist.isRevoked('tb-hydrated-001')).toBe(true);

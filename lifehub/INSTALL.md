@@ -27,12 +27,22 @@ The fastest way to run LifeHub is with Docker Compose. This starts MongoDB, the 
 ```bash
 # 1. Copy and fill in secrets
 cp .env.example .env
-nano .env   # set JWT_SECRET and ENCRYPTION_KEY at minimum
+nano .env   # set the required values listed below
+```
 
+**Required `.env` values for Docker:**
+
+| Variable | Description |
+|---|---|
+| `JWT_SECRET` | Random 64-char hex string (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`) |
+| `ENCRYPTION_KEY` | Random 64-char hex string (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
+| `MONGO_ROOT_PASSWORD` | Strong password for the MongoDB root user — **change this!** |
+
+```bash
 # 2. Start all services
 docker compose up -d
 
-# 3. Watch the API start up
+# 3. Watch the API start up (waits for MongoDB to be healthy first)
 docker compose logs -f api
 
 # 4. Verify
@@ -53,8 +63,44 @@ docker compose exec api node scripts/create-admin.js \
 - Client: http://localhost:8080
 - Docs:   http://localhost:3000/api/docs
 
-To stop: `docker-compose down`  
-To update: `git pull && docker-compose up -d --build`
+To stop: `docker compose down`  
+To update: `git pull && docker compose up -d --build`
+
+### Upgrading an existing Docker install (adding MongoDB auth)
+
+If you previously ran LifeHub without MongoDB authentication, follow these steps to enable it without losing data:
+
+```bash
+# 1. Stop the stack
+docker compose down
+
+# 2. Add credentials to your .env
+echo "MONGO_ROOT_USER=lifehub" >> .env
+echo "MONGO_ROOT_PASSWORD=your_new_strong_password" >> .env
+
+# 3. Start only Mongo temporarily WITHOUT auth to create the root user
+docker run --rm -v lifehub_mongo_data:/data/db mongo:7 \
+  mongosh --eval "
+    use admin;
+    db.createUser({ user: 'lifehub', pwd: 'your_new_strong_password',
+      roles: [{ role: 'root', db: 'admin' }] });
+  "
+
+# 4. Restart the full stack (now with auth)
+docker compose up -d
+```
+
+### Resource limits
+
+The docker-compose file sets the following default resource limits:
+
+| Service | CPU | Memory |
+|---|---|---|
+| mongo | 2 cores | 1 GB |
+| api | 1 core | 512 MB |
+| client | 0.5 cores | 128 MB |
+
+Adjust these in `docker-compose.yml` under each service's `deploy.resources` block if needed.
 
 ---
 

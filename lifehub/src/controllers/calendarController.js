@@ -119,7 +119,7 @@ async function updateEvent(req, res, next) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const allowed = ['title', 'description', 'start', 'end', 'allDay', 'location', 'color'];
+    const allowed = ['title', 'description', 'start', 'end', 'allDay', 'location', 'color', 'reminderMinutes'];
     const updates = {};
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
@@ -127,6 +127,10 @@ async function updateEvent(req, res, next) {
           ? (req.body[field] ? new Date(req.body[field]) : null)
           : req.body[field];
       }
+    }
+
+    if (updates.start !== undefined || updates.reminderMinutes !== undefined) {
+      updates.reminderSent = false;
     }
 
     const event = await Event.findOneAndUpdate(
@@ -164,8 +168,10 @@ module.exports = { listEvents, getUpcoming, createEvent, getEvent, updateEvent, 
 
 async function exportEvents(req, res, next) {
   try {
+    const format = req.query.format || 'csv';
+    if (!['json', 'csv'].includes(format)) return res.status(400).json({ error: 'Format must be json or csv' });
     const events = await Event.find({ userId: req.user.userId }).lean();
-    if (req.query.format === 'json') {
+    if (format === 'json') {
       res.setHeader('Content-Disposition', 'attachment; filename="events.json"');
       return res.json(events);
     }

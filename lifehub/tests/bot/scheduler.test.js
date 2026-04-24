@@ -106,6 +106,25 @@ describe('scheduler', () => {
 
       expect(bot.telegram.sendMessage).not.toHaveBeenCalled();
     });
+
+    it('does not re-send reminder if reminderSent is already true', async () => {
+      const event = {
+        _id: 'ev5', title: 'Already sent',
+        start: new Date(Date.now() + 5 * 60 * 1000),
+        reminderMinutes: 15,
+        reminderSent: true,
+        save: jest.fn(),
+        userId: 'user1',
+      };
+      const user = { _id: 'user1', telegramChatId: 'chat1' };
+      Event.find.mockResolvedValue([event]);
+      User.findById.mockResolvedValue(user);
+
+      await eventReminders(bot);
+
+      expect(bot.telegram.sendMessage).not.toHaveBeenCalled();
+      expect(event.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('taskReminders', () => {
@@ -159,6 +178,23 @@ describe('scheduler', () => {
       Task.find.mockResolvedValue([]);
       await taskReminders(bot);
       expect(bot.telegram.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('skips tasks whose dueDateReminderSent is already true', async () => {
+      const task = {
+        _id: 'task4', title: 'Already reminded',
+        dueDateReminderSent: true,
+        save: jest.fn(),
+        userId: 'user1',
+      };
+      const user = { _id: 'user1', telegramChatId: 'chat1' };
+      Task.find.mockResolvedValue([task]);
+      User.findById.mockResolvedValue(user);
+
+      await taskReminders(bot);
+
+      expect(bot.telegram.sendMessage).not.toHaveBeenCalled();
+      expect(task.save).not.toHaveBeenCalled();
     });
   });
 
