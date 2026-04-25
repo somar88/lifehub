@@ -11,19 +11,29 @@ const emailService = require('../../src/services/emailService');
 
 jest.mock('../../src/services/emailService');
 
+const PASS = 'TestPass1!';
+
 async function registerAndLogin(overrides = {}) {
-  const data = { name: 'Test User', email: 'test@example.com', password: 'password123', ...overrides };
+  const data = { name: 'Test User', email: 'test@example.com', password: PASS, ...overrides };
   emailService.sendWelcomeEmail.mockResolvedValue();
   const res = await request(app).post('/api/auth/register').send(data);
   return res.body.token;
 }
 
 describe('User Routes', () => {
-  beforeAll(() => dbHelper.connect());
+  beforeAll(async () => {
+    await dbHelper.connect();
+    emailService.sendWelcomeEmail.mockResolvedValue();
+    emailService.sendEmailChangeVerificationEmail.mockResolvedValue();
+  });
+
   afterAll(() => dbHelper.disconnect());
+
   afterEach(async () => {
     await User.deleteMany({});
     jest.clearAllMocks();
+    emailService.sendWelcomeEmail.mockResolvedValue();
+    emailService.sendEmailChangeVerificationEmail.mockResolvedValue();
   });
 
   describe('GET /api/users/me', () => {
@@ -54,6 +64,20 @@ describe('User Routes', () => {
       expect(res.body.name).toBe('Updated Name');
     });
 
+    it('updates the timezone preference', async () => {
+      const token = await registerAndLogin();
+      const res = await request(app).patch('/api/users/me').set('Authorization', `Bearer ${token}`).send({ timezone: 'America/New_York' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.timezone).toBe('America/New_York');
+    });
+
+    it('updates dailyDigestHour', async () => {
+      const token = await registerAndLogin();
+      const res = await request(app).patch('/api/users/me').set('Authorization', `Bearer ${token}`).send({ dailyDigestHour: 9 });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.dailyDigestHour).toBe(9);
+    });
+
     it('returns 400 when name is empty string', async () => {
       const token = await registerAndLogin();
       const res = await request(app).patch('/api/users/me').set('Authorization', `Bearer ${token}`).send({ name: '' });
@@ -72,9 +96,20 @@ describe('User Routes', () => {
       const res = await request(app)
         .post('/api/users/me/password')
         .set('Authorization', `Bearer ${token}`)
-        .send({ currentPassword: 'password123', newPassword: 'newpassword456' });
+        .send({ currentPassword: PASS, newPassword: 'NewPass2@' });
       expect(res.statusCode).toBe(200);
       expect(res.body.message).toMatch(/changed/i);
+      expect(res.body.token).toBeDefined();
+    });
+
+    it('invalidates old token after password change', async () => {
+      const token = await registerAndLogin();
+      await request(app)
+        .post('/api/users/me/password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ currentPassword: PASS, newPassword: 'NewPass2@' });
+      const res = await request(app).get('/api/users/me').set('Authorization', `Bearer ${token}`);
+      expect(res.statusCode).toBe(401);
     });
 
     it('returns 401 when current password is wrong', async () => {
@@ -82,7 +117,7 @@ describe('User Routes', () => {
       const res = await request(app)
         .post('/api/users/me/password')
         .set('Authorization', `Bearer ${token}`)
-        .send({ currentPassword: 'wrongpassword', newPassword: 'newpassword456' });
+        .send({ currentPassword: 'WrongPass1!', newPassword: 'NewPass2@' });
       expect(res.statusCode).toBe(401);
     });
 
@@ -91,7 +126,16 @@ describe('User Routes', () => {
       const res = await request(app)
         .post('/api/users/me/password')
         .set('Authorization', `Bearer ${token}`)
-        .send({ currentPassword: 'password123', newPassword: 'short' });
+        .send({ currentPassword: PASS, newPassword: 'short' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when new password has no special character', async () => {
+      const token = await registerAndLogin();
+      const res = await request(app)
+        .post('/api/users/me/password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ currentPassword: PASS, newPassword: 'NewPass123' });
       expect(res.statusCode).toBe(400);
     });
 
@@ -100,20 +144,56 @@ describe('User Routes', () => {
       const res = await request(app)
         .post('/api/users/me/password')
         .set('Authorization', `Bearer ${token}`)
-        .send({ newPassword: 'newpassword456' });
+        .send({ newPassword: 'NewPass2@' });
       expect(res.statusCode).toBe(400);
     });
   });
 
   describe('PATCH /api/users/me/email', () => {
-    it('changes email with correct password', async () => {
+    it('initiates email change and sends verification email', async () => {
       const token = await registerAndLogin();
       const res = await request(app)
         .patch('/api/users/me/email')
         .set('Authorization', `Bearer ${token}`)
-        .send({ email: 'newemail@example.com', currentPassword: 'password123' });
+        .send({ email: 'newemail@example.com', currentPassword: PASS });
       expect(res.statusCode).toBe(200);
-      expect(res.body.email).toBe('newemail@example.com');
+      expect(res.body.message).toMatch(/verification/i);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(emailService.sendEmailChangeVerificationEmail).toHaveBeenCalledWith(
+        'newemail@example.com',
+        expect.any(String),
+        expect.stringContaining('emailChangeToken=')
+      );
+    });
+
+    it('sets pendingEmail on user', async () => {
+      const token = await registerAndLogin();
+      await request(app)
+        .patch('/api/users/me/email')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'pending@example.com', currentPassword: PASS });
+      const user = await User.findOne({ email: 'test@example.com' });
+      expect(user.pendingEmail).toBe('pending@example.com');
+    });
+
+    it('returns 409 when new email is already taken', async () => {
+      await request(app).post('/api/auth/register').send({ name: 'Other', email: 'taken@example.com', password: PASS });
+      const token = await registerAndLogin();
+      const res = await request(app)
+        .patch('/api/users/me/email')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'taken@example.com', currentPassword: PASS });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 400 when new email equals current email', async () => {
+      const token = await registerAndLogin();
+      const res = await request(app)
+        .patch('/api/users/me/email')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'test@example.com', currentPassword: PASS });
+      expect(res.statusCode).toBe(400);
     });
 
     it('returns 401 when password is wrong', async () => {
@@ -121,7 +201,7 @@ describe('User Routes', () => {
       const res = await request(app)
         .patch('/api/users/me/email')
         .set('Authorization', `Bearer ${token}`)
-        .send({ email: 'new@example.com', currentPassword: 'wrongpassword' });
+        .send({ email: 'new@example.com', currentPassword: 'WrongPass1!' });
       expect(res.statusCode).toBe(401);
     });
 
@@ -130,7 +210,41 @@ describe('User Routes', () => {
       const res = await request(app)
         .patch('/api/users/me/email')
         .set('Authorization', `Bearer ${token}`)
-        .send({ email: 'not-an-email', currentPassword: 'password123' });
+        .send({ email: 'not-an-email', currentPassword: PASS });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('GET /api/users/me/email/verify', () => {
+    it('applies pending email change with valid token', async () => {
+      emailService.sendEmailChangeVerificationEmail.mockResolvedValue();
+      const token = await registerAndLogin();
+
+      await request(app)
+        .patch('/api/users/me/email')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'new@example.com', currentPassword: PASS });
+
+      await new Promise((r) => setTimeout(r, 50));
+      const verifyUrl = emailService.sendEmailChangeVerificationEmail.mock.calls[0][2];
+      const verifyToken = new URL(verifyUrl).searchParams.get('emailChangeToken');
+
+      const res = await request(app).get(`/api/users/me/email/verify?token=${verifyToken}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toMatch(/updated/i);
+
+      const user = await User.findOne({ email: 'new@example.com' });
+      expect(user).not.toBeNull();
+      expect(user.pendingEmail).toBeNull();
+    });
+
+    it('returns 400 for invalid verification token', async () => {
+      const res = await request(app).get('/api/users/me/email/verify?token=badtoken');
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when token is omitted', async () => {
+      const res = await request(app).get('/api/users/me/email/verify');
       expect(res.statusCode).toBe(400);
     });
   });
@@ -138,10 +252,7 @@ describe('User Routes', () => {
   describe('DELETE /api/users/me', () => {
     it('deletes own account with correct password', async () => {
       const token = await registerAndLogin();
-      const res = await request(app)
-        .delete('/api/users/me')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ password: 'password123' });
+      const res = await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
       expect(res.statusCode).toBe(200);
       expect(await User.findOne({ email: 'test@example.com' })).toBeNull();
     });
@@ -154,10 +265,7 @@ describe('User Routes', () => {
       await Contact.create({ userId: user._id, firstName: 'My contact' });
       await ShoppingList.create({ userId: user._id, name: 'My list' });
 
-      await request(app)
-        .delete('/api/users/me')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ password: 'password123' });
+      await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
 
       expect(await Task.countDocuments({ userId: user._id })).toBe(0);
       expect(await Contact.countDocuments({ userId: user._id })).toBe(0);
@@ -166,10 +274,7 @@ describe('User Routes', () => {
 
     it('returns 401 when password is wrong', async () => {
       const token = await registerAndLogin();
-      const res = await request(app)
-        .delete('/api/users/me')
-        .set('Authorization', `Bearer ${token}`)
-        .send({ password: 'wrongpassword' });
+      const res = await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: 'WrongPass1!' });
       expect(res.statusCode).toBe(401);
     });
 

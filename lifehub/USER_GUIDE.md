@@ -125,7 +125,7 @@ curl -s -X POST http://your-server:3000/api/auth/accept-invite \
   -H "Content-Type: application/json" \
   -d '{
     "token":    "<token-from-email>",
-    "password": "securepassword123"
+    "password": "Ada@Pass1!"
   }' | jq .
 ```
 
@@ -143,6 +143,8 @@ curl -s -X POST http://your-server:3000/api/auth/accept-invite \
 }
 ```
 
+> **Password requirements:** minimum 8 characters with at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. `Ada@Pass1!`).
+
 Your account is now `active`. Save the token:
 
 ```bash
@@ -158,7 +160,7 @@ TOKEN="eyJhbGci..."
 ```bash
 curl -s -X POST http://your-server:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "ada@example.com", "password": "securepassword123"}' | jq .
+  -d '{"email": "ada@example.com", "password": "Ada@Pass1!"}' | jq .
 ```
 
 Returns `{ user, token }`. Save the token for subsequent requests.
@@ -172,6 +174,8 @@ Returns `{ user, token }`. Save the token for subsequent requests.
 | `inactive` | `Account has been deactivated` |
 
 > **Rate limit:** 10 login attempts per 15 minutes per IP.
+
+> **Account lockout:** After 5 consecutive failed login attempts the account is locked for 15 minutes. Any further attempts during the lock window return `423 Locked` with the message `Account is temporarily locked. Try again in X minutes.`
 
 ---
 
@@ -190,6 +194,8 @@ After logout, any request using the same token will receive `401 Token has been 
 
 ---
 
+### Forgot password
+
 Sends a password reset link to the email address. The link expires after 1 hour.
 
 ```bash
@@ -204,14 +210,14 @@ curl -s -X POST http://your-server:3000/api/auth/forgot-password \
 
 ### Reset password
 
-Use the token from the email link to set a new password.
+Use the token from the email link to set a new password. The same password complexity requirements apply: minimum 8 characters with uppercase, lowercase, number, and special character.
 
 ```bash
 curl -s -X POST http://your-server:3000/api/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
     "token": "<token-from-email>",
-    "password": "newpassword456"
+    "password": "Ada@NewPass2!"
   }'
 ```
 
@@ -235,42 +241,71 @@ curl -s http://your-server:3000/api/users/me \
   "email": "ada@example.com",
   "role": "user",
   "isActive": true,
+  "timezone": "UTC",
+  "lastLoginAt": "2026-04-25T08:30:00.000Z",
   "createdAt": "2026-04-22T10:00:00.000Z"
 }
 ```
 
 ---
 
-### Update your name or digest hour
+### Update your profile
 
-`PATCH /api/users/me` accepts `name` and/or `dailyDigestHour` (both optional).
+`PATCH /api/users/me` accepts `name`, `timezone`, and/or `dailyDigestHour` (all optional).
 
 ```bash
+# Update display name
 curl -s -X PATCH http://your-server:3000/api/users/me \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Ada K. Lovelace"}'
+
+# Set your timezone (affects daily digest scheduling and display)
+curl -s -X PATCH http://your-server:3000/api/users/me \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"timezone": "America/New_York"}'
+
+# Set daily digest hour (0–23) and timezone together
+curl -s -X PATCH http://your-server:3000/api/users/me \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"dailyDigestHour": 8, "timezone": "Europe/London"}'
 ```
+
+Use standard [IANA timezone names](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for `timezone` (e.g. `America/New_York`, `Europe/London`, `Asia/Tokyo`). Default is `UTC`.
 
 ---
 
 ### Change your password
 
-Requires your current password for verification.
+Requires your current password for verification. The new password must meet the same complexity requirements as registration (min 8 chars, uppercase, lowercase, number, special character).
 
 ```bash
 curl -s -X POST http://your-server:3000/api/users/me/password \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "currentPassword": "securepassword123",
-    "newPassword": "evenmoresecure789"
+    "currentPassword": "Ada@Pass1!",
+    "newPassword": "Ada@NewPass2!"
   }'
 ```
+
+**Response:**
+
+```json
+{ "message": "Password changed successfully", "token": "eyJhbGci..." }
+```
+
+The response includes a **new token** — your old token is immediately invalidated. Replace `$TOKEN` with the new value.
 
 ---
 
 ### Change your email address
+
+Changing your email is a two-step verified process: first you initiate the change (which sends a confirmation link to the new address), then you click the link to apply it.
+
+#### Step 1 — Initiate the change
 
 Requires your current password for verification.
 
@@ -280,9 +315,33 @@ curl -s -X PATCH http://your-server:3000/api/users/me/email \
   -H "Content-Type: application/json" \
   -d '{
     "email": "ada.new@example.com",
-    "currentPassword": "securepassword123"
+    "currentPassword": "Ada@Pass1!"
   }'
 ```
+
+**Response:**
+
+```json
+{ "message": "Verification email sent to ada.new@example.com. Check your inbox to confirm the change." }
+```
+
+Your current email remains active until you confirm. The verification link expires after 1 hour.
+
+#### Step 2 — Verify the new address
+
+Click the link in the confirmation email, or call the endpoint directly with the token from the link:
+
+```bash
+curl -s "http://your-server:3000/api/users/me/email/verify?token=<token-from-email>"
+```
+
+**Response:**
+
+```json
+{ "message": "Email address updated successfully." }
+```
+
+No authentication header is needed — the token in the URL is sufficient.
 
 ---
 
@@ -294,14 +353,14 @@ Permanently deletes your account and all your data. Requires your password.
 curl -s -X DELETE http://your-server:3000/api/users/me \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"password": "securepassword123"}'
+  -d '{"password": "Ada@Pass1!"}'
 ```
 
 ---
 
 ### Set your daily digest hour
 
-Controls when the Telegram bot sends your daily summary (open task count + today's events). Uses 24-hour format in the server's timezone.
+Controls when the Telegram bot sends your daily summary (open task count + today's events). Uses 24-hour format.
 
 ```bash
 curl -s -X PATCH http://your-server:3000/api/users/me \
@@ -312,7 +371,7 @@ curl -s -X PATCH http://your-server:3000/api/users/me \
 
 Valid values: `0`–`23`. Default is `8` (8am). You can also set this from the Telegram bot with `/digest 7`.
 
-> **Note on timezones:** The hour is interpreted in the **server's local time**. If your server runs in UTC, `/digest 8` means 8 AM UTC — adjust accordingly for your timezone.
+> **Timezones:** The hour is interpreted in your configured `timezone` (set via `PATCH /api/users/me`). If you haven't set a timezone, it defaults to UTC. Set your timezone once and the digest will fire at the right local time automatically.
 
 ---
 
@@ -453,6 +512,8 @@ Fields exported: `title`, `status`, `priority`, `dueDate`, `description`, `creat
 > **Tip:** If you complete a task and later reopen it (change status back to `todo` or `in-progress`), the due date reminder will automatically fire again on the due date.
 
 ---
+
+## 6. Calendar
 
 Events have a required **title** and **start** date/time. The **end** is optional (omit for point-in-time events or set `allDay: true` for full-day events).
 
@@ -620,6 +681,8 @@ Fields exported: `title`, `start`, `end`, `location`, `description`, `reminderMi
 > **Note:** Only `csv` (default) and `json` are accepted as format values. Any other value returns `400 Bad Request`.
 
 ---
+
+## 7. Contacts
 
 Only `firstName` is required. All other fields are optional.
 
@@ -1019,6 +1082,8 @@ Fields exported: `listName`, `itemName`, `checked`, `addedAt`.
 
 ---
 
+## 10. Telegram Bot
+
 Once your Telegram account is linked to LifeHub, you can manage all your data directly from the Telegram app.
 
 ### Linking your Telegram account
@@ -1103,7 +1168,7 @@ Short IDs are the last 6 characters of the MongoDB `_id` shown in `/tasks` outpu
 
 | Command | Description |
 |---|---|
-| `/digest <hour>` | Set your daily digest time (0–23, server timezone); e.g. `/digest 7` |
+| `/digest <hour>` | Set your daily digest time (0–23, your configured timezone); e.g. `/digest 7` |
 
 ---
 
@@ -1119,4 +1184,4 @@ The scheduler sends proactive notifications without any command. If your Telegra
 
 Set the reminder time per event when creating or editing it (API field: `reminderMinutes`, bot syntax: `remind <N>m`). Set your daily digest hour with `/digest <hour>` or via the profile API.
 
-> **Note on timezones:** The daily digest hour is relative to the **server's local time**, not yours. If the server runs in UTC, setting `dailyDigestHour: 8` means 8 AM UTC. Ask your admin for the server timezone if it matters.
+> **Timezones:** The daily digest hour is interpreted in your configured `timezone`. Set it once via `PATCH /api/users/me` with `{ "timezone": "America/New_York" }` and the digest will fire at the correct local time. Without a timezone set, it defaults to UTC.

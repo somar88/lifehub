@@ -1,3 +1,4 @@
+'use strict';
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -9,7 +10,14 @@ const Contact = require('../models/Contact');
 const Category = require('../models/Category');
 const Transaction = require('../models/Transaction');
 const ShoppingList = require('../models/ShoppingList');
+const AuditLog = require('../models/AuditLog');
+const emailService = require('../services/emailService');
+const logger = require('../config/logger');
 const { revoke } = require('../middleware/tokenBlacklist');
+
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
 
 async function getMe(req, res, next) {
   try {
@@ -29,6 +37,7 @@ async function updateMe(req, res, next) {
     const update = {};
     if (req.body.name !== undefined) update.name = req.body.name;
     if (req.body.dailyDigestHour !== undefined) update.dailyDigestHour = req.body.dailyDigestHour;
+    if (req.body.timezone !== undefined) update.timezone = req.body.timezone;
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
@@ -83,10 +92,52 @@ async function changeEmail(req, res, next) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    user.email = email.toLowerCase();
+    const normalizedEmail = email.toLowerCase();
+
+    if (normalizedEmail === user.email) {
+      return res.status(400).json({ error: 'New email is the same as current email' });
+    }
+
+    const existing = await User.findOne({ email: normalizedEmail });
+    if (existing) return res.status(409).json({ error: 'Email is already in use' });
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    user.pendingEmail = normalizedEmail;
+    user.emailChangeToken = hashToken(rawToken);
+    user.emailChangeTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await user.save();
 
-    res.json(user);
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:8080';
+    const verifyUrl = `${clientUrl}?emailChangeToken=${rawToken}`;
+    emailService.sendEmailChangeVerificationEmail(normalizedEmail, user.name, verifyUrl).catch((err) =>
+      logger.warn('Email change verification failed', { error: err.message })
+    );
+
+    res.json({ message: 'A verification link has been sent to your new email address. Please confirm to complete the change.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function verifyEmailChange(req, res, next) {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'Token is required' });
+
+    const user = await User.findOne({
+      emailChangeToken: hashToken(token),
+      emailChangeTokenExpiry: { $gt: new Date() },
+    }).select('+emailChangeToken');
+    if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
+
+    user.email = user.pendingEmail;
+    user.pendingEmail = null;
+    user.emailChangeToken = null;
+    user.emailChangeTokenExpiry = null;
+    await user.save();
+
+    logger.info('Email address changed', { userId: user._id, newEmail: user.email });
+    res.json({ message: 'Email address updated successfully', user });
   } catch (err) {
     next(err);
   }
@@ -115,6 +166,13 @@ async function deleteMe(req, res, next) {
       ShoppingList.deleteMany({ userId: req.user.userId }),
     ]);
 
+    await AuditLog.create({
+      action: 'account_deleted_self',
+      adminId: req.user.userId,
+      targetId: req.user.userId,
+      meta: { email: user.email },
+    }).catch(() => {});
+
     if (req.user?.jti) revoke(req.user.jti, req.user.exp);
     res.json({ message: 'Account deleted' });
   } catch (err) {
@@ -122,4 +180,4 @@ async function deleteMe(req, res, next) {
   }
 }
 
-module.exports = { getMe, updateMe, changePassword, changeEmail, deleteMe };
+module.exports = { getMe, updateMe, changePassword, changeEmail, verifyEmailChange, deleteMe };

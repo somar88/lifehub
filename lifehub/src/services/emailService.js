@@ -87,8 +87,31 @@ async function sendInviteEmail(to, name, inviteUrl) {
   logger.info('Invite email sent', { to });
 }
 
-module.exports = { sendWelcomeEmail, sendPasswordResetEmail, sendInviteEmail, buildTransporter,
-                   sendReminderEmail, sendTaskDueEmail, sendDailyDigestEmail };
+module.exports = {
+  buildTransporter,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendInviteEmail,
+  sendEmailChangeVerificationEmail,
+  sendReminderEmail,
+  sendTaskDueEmail,
+  sendDailyDigestEmail,
+};
+
+async function sendEmailChangeVerificationEmail(to, name, verifyUrl) {
+  const transporter = await buildTransporter();
+  const from = (await require('./configService').get('email.user').catch(() => null)) || process.env.GMAIL_USER;
+  await transporter.sendMail({
+    from: `"LifeHub" <${from}>`,
+    to,
+    subject: 'LifeHub — Confirm your new email address',
+    html: `<h1>Hi ${name},</h1>
+<p>You requested to change your LifeHub email to <strong>${to}</strong>.</p>
+<p><a href="${verifyUrl}">Confirm new email address</a></p>
+<p>This link expires in 24 hours. If you did not request this change, you can safely ignore this email.</p>`,
+  });
+  logger.info('Email change verification sent', { to });
+}
 
 async function sendReminderEmail(user, event, minutesUntil) {
   const transporter = await buildTransporter();

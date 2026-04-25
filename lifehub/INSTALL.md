@@ -282,7 +282,7 @@ Enter your MongoDB URI (press Enter to accept the default from `.env`). The wiza
 Enter the name, email and password for the first administrator account.  
 This account will have access to the admin dashboard and all admin API routes.
 
-- Password must be at least 8 characters
+- Password requirements: minimum 8 characters, with at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. `MyPass1!`)
 - If an admin already exists you can skip or create a second one
 
 ### Step 3 — Email service
@@ -361,7 +361,7 @@ Expected response:
 # Register a user and capture the token
 TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"Test","email":"test@example.com","password":"password123"}' \
+  -d '{"name":"Test","email":"test@example.com","password":"MyPass1!"}' \
   | jq -r .token)
 
 echo "Token: $TOKEN"
@@ -401,20 +401,22 @@ Log in with the admin credentials you set in Step 2 of the provisioning wizard.
 |---|---|
 | **Dashboard** | View server uptime, database status, email service status, user counts |
 | **Email Config** | Switch between Gmail SMTP and OAuth2, update credentials, send a test email |
-| **Users** | View users by status; approve or reject applications; create and invite users directly; toggle active/inactive; promote to admin |
+| **Users** | View and search users by name or email; approve or reject applications; create and invite users directly; resend invite emails; revoke all active sessions; toggle active/inactive; promote to admin |
 
 ### User lifecycle
 
 Registration is invite-only — users cannot create their own accounts. The admin controls who joins:
 
 ```
-POST /api/auth/apply              →  pending
-PATCH /api/admin/users/:id/approve  →  invited  (invitation email sent)
-GET  /api/auth/verify-invite        →  validate invite link
-POST /api/auth/accept-invite        →  active   (user sets password)
+POST /api/auth/apply                        →  pending
+PATCH /api/admin/users/:id/approve          →  invited  (invitation email sent)
+POST  /api/admin/users/:id/resend-invite    →  re-sends invite to same address
+GET   /api/auth/verify-invite               →  validate invite link
+POST  /api/auth/accept-invite               →  active   (user sets password)
 
-PATCH /api/admin/users/:id/reject   →  deleted
-POST  /api/admin/users              →  invited  (admin creates directly, email sent immediately)
+PATCH /api/admin/users/:id/reject           →  deleted
+POST  /api/admin/users                      →  invited  (admin creates directly, email sent immediately)
+POST  /api/admin/users/:id/revoke-sessions  →  invalidates all active tokens for the user
 ```
 
 ### Admin API (for programmatic access)
@@ -423,15 +425,18 @@ All admin endpoints require a valid admin JWT in the `Authorization: Bearer <tok
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/admin/system/status` | Server and database health, pending user count |
+| GET | `/api/admin/system/status` | Server and database health; user counts by status (active, invited, inactive, pending) |
 | GET | `/api/admin/config/email` | Current email config (secrets masked) |
 | PUT | `/api/admin/config/email` | Update email provider and credentials |
 | POST | `/api/admin/config/email/test` | Send test email to the calling admin |
-| GET | `/api/admin/users` | Paginated user list — supports `?status=pending\|invited\|active\|inactive` |
+| GET | `/api/admin/users` | Paginated user list — supports `?status=pending\|invited\|active\|inactive` and `?search=xxx` |
 | POST | `/api/admin/users` | Create and invite a user directly (`{ name, email, role? }`) |
 | PATCH | `/api/admin/users/:id/approve` | Approve a pending application → sends invite email |
 | PATCH | `/api/admin/users/:id/reject` | Reject and delete a pending application |
 | PATCH | `/api/admin/users/:id` | Toggle `isActive` or change `role` |
+| POST | `/api/admin/users/:id/resend-invite` | Re-send invite email to an invited user (generates a fresh token) |
+| POST | `/api/admin/users/:id/revoke-sessions` | Invalidate all active sessions for a user |
+| GET | `/api/admin/audit-log` | Paginated admin action log — supports `?action=xxx&adminId=xxx&targetId=xxx` |
 
 ---
 
@@ -711,11 +716,12 @@ Exceeding the limit returns `429 Too Many Requests` with a JSON error message. R
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/me` | Get own profile |
-| PATCH | `/me` | Update name |
-| POST | `/me/password` | Change password (requires `currentPassword` + `newPassword`) |
-| PATCH | `/me/email` | Change email (requires `email` + `currentPassword`) |
-| DELETE | `/me` | Delete own account (requires `password`) |
+| GET | `/me` | Get own profile (includes `lastLoginAt`, `timezone`) |
+| PATCH | `/me` | Update name, timezone, or daily digest hour |
+| POST | `/me/password` | Change password (requires `currentPassword` + `newPassword`) — returns new token |
+| PATCH | `/me/email` | Initiate email change — sends verification link to new address (requires `email` + `currentPassword`) |
+| GET | `/me/email/verify` | Apply pending email change (`?token=xxx`) — no auth required |
+| DELETE | `/me` | Delete own account and all data (requires `password`) |
 
 ---
 
@@ -870,15 +876,18 @@ Exceeding the limit returns `429 Too Many Requests` with a JSON error message. R
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/system/status` | Server uptime, DB state, email status, pending user count |
+| GET | `/system/status` | Server uptime, DB state, email status, user counts by status |
 | GET | `/config/email` | Current email config (secrets masked) |
 | PUT | `/config/email` | Update email provider and credentials |
 | POST | `/config/email/test` | Send test email to the calling admin |
-| GET | `/users` | Paginated user list — supports `?status=pending\|invited\|active\|inactive` |
+| GET | `/users` | Paginated user list — `?status=pending\|invited\|active\|inactive`, `?search=xxx` |
 | POST | `/users` | Create and invite a user (`{ name, email, role? }`) |
 | PATCH | `/users/:id/approve` | Approve pending user → sends invite email |
 | PATCH | `/users/:id/reject` | Delete pending user |
 | PATCH | `/users/:id` | Toggle `isActive` or change `role` |
+| POST | `/users/:id/resend-invite` | Re-send invite email (new token) |
+| POST | `/users/:id/revoke-sessions` | Invalidate all active sessions for a user |
+| GET | `/audit-log` | Paginated admin action log (`?action=xxx&adminId=xxx&targetId=xxx&page=1&limit=20`) |
 
 ---
 

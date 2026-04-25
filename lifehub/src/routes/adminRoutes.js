@@ -1,3 +1,4 @@
+'use strict';
 const express = require('express');
 const { body } = require('express-validator');
 const rateLimit = require('express-rate-limit');
@@ -16,6 +17,8 @@ const emailTestLimiter = rateLimit({
 router.use(requireAdmin);
 
 router.get('/system/status', adminController.getStatus);
+
+router.get('/audit-log', adminController.getAuditLog);
 
 router.get('/config/email', adminController.getEmailConfig);
 
@@ -37,6 +40,10 @@ router.post('/users', [
 router.patch('/users/:id/approve', adminController.approveUser);
 
 router.patch('/users/:id/reject', adminController.rejectUser);
+
+router.post('/users/:id/resend-invite', adminController.resendInvite);
+
+router.post('/users/:id/revoke-sessions', adminController.revokeUserSessions);
 
 router.patch('/users/:id', [
   body('role').optional().isIn(['user', 'admin']).withMessage('Role must be user or admin'),

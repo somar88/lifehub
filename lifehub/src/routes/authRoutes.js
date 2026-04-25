@@ -1,9 +1,10 @@
+'use strict';
 const express = require('express');
 const { body, query } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
-const { emailBody } = require('./validators');
+const { emailBody, passwordBody } = require('./validators');
 
 const router = express.Router();
 
@@ -44,7 +45,7 @@ const applyLimiter = rateLimit({
 router.post('/register', testOnly, [
   body('name').notEmpty().trim().withMessage('Name is required'),
   emailBody(),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  passwordBody('password', 'Password'),
 ], authController.register);
 
 router.post('/login', loginLimiter, [
@@ -58,7 +59,7 @@ router.post('/forgot-password', forgotPasswordLimiter, [
 
 router.post('/reset-password', [
   body('token').notEmpty().withMessage('Token is required'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  passwordBody('password', 'Password'),
 ], authController.resetPassword);
 
 router.post('/apply', applyLimiter, [
@@ -73,7 +74,7 @@ router.get('/verify-invite', [
 
 router.post('/accept-invite', [
   body('token').notEmpty().withMessage('Token is required'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  passwordBody('password', 'Password'),
 ], authController.acceptInvite);
 
 router.post('/logout', auth, authController.logout);

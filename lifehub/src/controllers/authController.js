@@ -1,3 +1,4 @@
+'use strict';
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -7,12 +8,19 @@ const emailService = require('../services/emailService');
 const logger = require('../config/logger');
 const { revoke } = require('../middleware/tokenBlacklist');
 
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 function generateToken(user) {
   return jwt.sign(
     { userId: user._id, role: user.role, jti: crypto.randomUUID() },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+}
+
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
 async function register(req, res, next) {
@@ -40,9 +48,14 @@ async function login(req, res, next) {
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+passwordHash +loginAttempts +lockUntil');
 
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return res.status(401).json({ error: `Account is temporarily locked. Try again in ${minutesLeft} minute(s).` });
+    }
 
     if (user.status === 'pending') {
       return res.status(401).json({ error: 'Your application is pending admin approval' });
@@ -55,8 +68,20 @@ async function login(req, res, next) {
     }
 
     if (!(await user.comparePassword(password))) {
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      if (user.loginAttempts >= LOGIN_MAX_ATTEMPTS) {
+        user.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
+        user.loginAttempts = 0;
+        logger.warn('Account locked due to failed login attempts', { userId: user._id });
+      }
+      await user.save();
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    user.lastLoginAt = new Date();
+    await user.save();
 
     res.json({ user, token: generateToken(user) });
   } catch (err) {
@@ -71,7 +96,7 @@ async function forgotPassword(req, res, next) {
 
     if (user) {
       const rawToken = crypto.randomBytes(32).toString('hex');
-      user.resetToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+      user.resetToken = hashToken(rawToken);
       user.resetTokenExpiry = new Date(Date.now() + 3_600_000);
       await user.save();
 
@@ -92,9 +117,8 @@ async function resetPassword(req, res, next) {
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { token, password } = req.body;
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const user = await User.findOne({
-      resetToken: tokenHash,
+      resetToken: hashToken(token),
       resetTokenExpiry: { $gt: new Date() },
     });
 
@@ -133,7 +157,10 @@ async function verifyInvite(req, res, next) {
     const { token } = req.query;
     if (!token) return res.status(400).json({ error: 'Token is required' });
 
-    const user = await User.findOne({ inviteToken: token, inviteTokenExpiry: { $gt: new Date() } }).select('+inviteToken');
+    const user = await User.findOne({
+      inviteToken: hashToken(token),
+      inviteTokenExpiry: { $gt: new Date() },
+    });
     if (!user) return res.status(400).json({ error: 'Invalid or expired invite link' });
 
     res.json({ valid: true, name: user.name, email: user.email });
@@ -148,7 +175,10 @@ async function acceptInvite(req, res, next) {
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { token, password } = req.body;
-    const user = await User.findOne({ inviteToken: token, inviteTokenExpiry: { $gt: new Date() } }).select('+inviteToken');
+    const user = await User.findOne({
+      inviteToken: hashToken(token),
+      inviteTokenExpiry: { $gt: new Date() },
+    });
     if (!user) return res.status(400).json({ error: 'Invalid or expired invite link' });
 
     user.passwordHash = await bcrypt.hash(password, 12);
@@ -156,6 +186,7 @@ async function acceptInvite(req, res, next) {
     user.isActive = true;
     user.inviteToken = null;
     user.inviteTokenExpiry = null;
+    user.lastLoginAt = new Date();
     await user.save();
 
     res.json({ user, token: generateToken(user) });
@@ -164,9 +195,9 @@ async function acceptInvite(req, res, next) {
   }
 }
 
-module.exports = { register, login, logout, forgotPassword, resetPassword, apply, verifyInvite, acceptInvite };
-
 function logout(req, res) {
   if (req.user?.jti) revoke(req.user.jti, req.user.exp);
   res.json({ message: 'Logged out' });
 }
+
+module.exports = { register, login, logout, forgotPassword, resetPassword, apply, verifyInvite, acceptInvite };
