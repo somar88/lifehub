@@ -1,8 +1,16 @@
 const User = require('../models/User');
 const Event = require('../models/Event');
 const Task = require('../models/Task');
+const Contact = require('../models/Contact');
+const Category = require('../models/Category');
+const Transaction = require('../models/Transaction');
+const ShoppingList = require('../models/ShoppingList');
+const AuditLog = require('../models/AuditLog');
 const logger = require('../config/logger');
 const { sendReminderEmail, sendTaskDueEmail, sendDailyDigestEmail } = require('../services/emailService');
+
+const GRACE_DAYS = parseInt(process.env.RECOVERY_GRACE_DAYS || '30', 10);
+let lastPurgeDate = null;
 
 async function eventReminders(bot) {
   const now = new Date();
@@ -111,6 +119,40 @@ async function dailyDigests(bot) {
   }
 }
 
+async function purgeDeletedAccounts() {
+  const today = new Date().toISOString().split('T')[0];
+  if (lastPurgeDate === today) return;
+  lastPurgeDate = today;
+
+  const cutoff = new Date(Date.now() - GRACE_DAYS * 24 * 60 * 60 * 1000);
+  let expired;
+  try {
+    expired = await User.find({ status: 'deleted', deletedAt: { $lt: cutoff } }, '_id email').lean();
+  } catch (err) {
+    logger.error('Purge query failed', { error: err.message });
+    lastPurgeDate = null; // allow retry next tick
+    return;
+  }
+
+  for (const u of expired) {
+    try {
+      await Promise.all([
+        Task.deleteMany({ userId: u._id }),
+        Event.deleteMany({ userId: u._id }),
+        Contact.deleteMany({ userId: u._id }),
+        Category.deleteMany({ userId: u._id }),
+        Transaction.deleteMany({ userId: u._id }),
+        ShoppingList.deleteMany({ userId: u._id }),
+      ]);
+      await User.findByIdAndDelete(u._id);
+      await AuditLog.create({ action: 'account_purged', meta: { email: u.email } }).catch(() => {});
+      logger.info('Purged expired deleted account', { email: u.email });
+    } catch (err) {
+      logger.warn('Account purge failed', { userId: u._id, error: err.message });
+    }
+  }
+}
+
 function startScheduler(bot) {
   let consecutiveFailures = 0;
   setInterval(async () => {
@@ -118,6 +160,7 @@ function startScheduler(bot) {
       await eventReminders(bot);
       await taskReminders(bot);
       await dailyDigests(bot);
+      await purgeDeletedAccounts();
       consecutiveFailures = 0;
     } catch (err) {
       consecutiveFailures++;
@@ -128,4 +171,6 @@ function startScheduler(bot) {
   }, 60 * 1000);
 }
 
-module.exports = { startScheduler, eventReminders, taskReminders, dailyDigests };
+function _resetPurgeDate() { lastPurgeDate = null; }
+
+module.exports = { startScheduler, eventReminders, taskReminders, dailyDigests, purgeDeletedAccounts, _resetPurgeDate };

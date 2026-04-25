@@ -45,6 +45,8 @@ router.post('/users/:id/resend-invite', adminController.resendInvite);
 
 router.post('/users/:id/revoke-sessions', adminController.revokeUserSessions);
 
+router.post('/users/:id/cancel-deletion', adminController.cancelDeletion);
+
 router.patch('/users/:id', [
   body('role').optional().isIn(['user', 'admin']).withMessage('Role must be user or admin'),
   body('isActive').optional().isBoolean().withMessage('isActive must be boolean'),

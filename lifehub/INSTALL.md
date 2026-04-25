@@ -487,14 +487,14 @@ CLIENT_URL=http://localhost:8080
 |---|---|
 | **Login** | Email + password; link to the Apply screen |
 | **Apply** | Submit an account application (first name, last name, email) |
-| **Accept Invite** | Reached via invite link email — set a password to activate the account |
+| **Accept Invite** | Reached via invite link email — set a password to activate the account; live strength meter guides complexity |
 | **Dashboard** | Open task count, upcoming events, monthly income/expense summary |
 | **Tasks** | Create, edit, filter, and delete tasks with status and priority |
 | **Calendar** | Create and manage events; per-event reminder minutes |
 | **Contacts** | Full contact list with search, favorites, and tags |
 | **Budget** | Category manager, transaction list, monthly summary with income/expense cards |
 | **Shopping** | Multiple lists, item-level check-off, inline item add |
-| **Profile → Account** | Change name, email, password; delete account |
+| **Profile → Account** | Change name, email, password (live strength meter); delete account |
 | **Profile → Telegram** | Generate OTP to link Telegram; unlink button |
 
 ---

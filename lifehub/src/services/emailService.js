@@ -93,10 +93,27 @@ module.exports = {
   sendPasswordResetEmail,
   sendInviteEmail,
   sendEmailChangeVerificationEmail,
+  sendAccountRecoveryEmail,
   sendReminderEmail,
   sendTaskDueEmail,
   sendDailyDigestEmail,
 };
+
+async function sendAccountRecoveryEmail(to, name, recoveryUrl, graceDays) {
+  const transporter = await buildTransporter();
+  const from = (await require('./configService').get('email.user').catch(() => null)) || process.env.GMAIL_USER;
+  await transporter.sendMail({
+    from: `"LifeHub" <${from}>`,
+    to,
+    subject: 'LifeHub — Your account has been scheduled for deletion',
+    html: `<h1>Hi ${name},</h1>
+<p>Your LifeHub account has been scheduled for deletion. All your data will be permanently removed in <strong>${graceDays} days</strong>.</p>
+<p>If this was a mistake, you can recover your account by clicking the link below. The link is valid for the entire grace period.</p>
+<p><a href="${recoveryUrl}">Recover my account</a></p>
+<p>If you did not request this, please use the recovery link above immediately to secure your account.</p>`,
+  });
+  logger.info('Account recovery email sent', { to });
+}
 
 async function sendEmailChangeVerificationEmail(to, name, verifyUrl) {
   const transporter = await buildTransporter();

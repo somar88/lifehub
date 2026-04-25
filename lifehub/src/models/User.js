@@ -11,7 +11,12 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, default: null, select: false },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     isActive: { type: Boolean, default: true },
-    status: { type: String, enum: ['pending', 'invited', 'active', 'inactive'], default: 'active' },
+    status: { type: String, enum: ['pending', 'invited', 'active', 'inactive', 'deleted'], default: 'active' },
+
+    // Soft-delete / recovery
+    deletedAt: { type: Date, default: null },
+    recoveryToken: { type: String, default: null, select: false },
+    recoveryTokenExpiry: { type: Date, default: null },
 
     // Password reset
     resetToken: { type: String, default: null },
@@ -70,9 +75,12 @@ userSchema.methods.toJSON = function () {
   delete obj.telegramLinkTokenExpiry;
   delete obj.loginAttempts;
   delete obj.tokensValidFrom;
+  delete obj.recoveryToken;
+  delete obj.recoveryTokenExpiry;
   return obj;
 };
 
 userSchema.index({ dailyDigestHour: 1, lastDigestDate: 1 });
+userSchema.index({ status: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('User', userSchema);

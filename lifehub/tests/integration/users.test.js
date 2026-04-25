@@ -250,14 +250,19 @@ describe('User Routes', () => {
   });
 
   describe('DELETE /api/users/me', () => {
-    it('deletes own account with correct password', async () => {
+    it('soft-deletes the account — user record remains with status deleted', async () => {
+      emailService.sendAccountRecoveryEmail.mockResolvedValue();
       const token = await registerAndLogin();
       const res = await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
       expect(res.statusCode).toBe(200);
-      expect(await User.findOne({ email: 'test@example.com' })).toBeNull();
+      const user = await User.findOne({ email: 'test@example.com' });
+      expect(user).not.toBeNull();
+      expect(user.status).toBe('deleted');
+      expect(user.deletedAt).toBeTruthy();
     });
 
-    it('deletes all user data on account deletion', async () => {
+    it('preserves user data during grace period', async () => {
+      emailService.sendAccountRecoveryEmail.mockResolvedValue();
       const token = await registerAndLogin();
       const user = await User.findOne({ email: 'test@example.com' });
 
@@ -267,9 +272,18 @@ describe('User Routes', () => {
 
       await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
 
-      expect(await Task.countDocuments({ userId: user._id })).toBe(0);
-      expect(await Contact.countDocuments({ userId: user._id })).toBe(0);
-      expect(await ShoppingList.countDocuments({ userId: user._id })).toBe(0);
+      expect(await Task.countDocuments({ userId: user._id })).toBe(1);
+      expect(await Contact.countDocuments({ userId: user._id })).toBe(1);
+      expect(await ShoppingList.countDocuments({ userId: user._id })).toBe(1);
+    });
+
+    it('sends a recovery email on soft-delete', async () => {
+      emailService.sendAccountRecoveryEmail.mockResolvedValue();
+      const token = await registerAndLogin();
+      await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
+      expect(emailService.sendAccountRecoveryEmail).toHaveBeenCalledWith(
+        'test@example.com', expect.any(String), expect.any(String), expect.any(Number)
+      );
     });
 
     it('returns 401 when password is wrong', async () => {
@@ -282,6 +296,83 @@ describe('User Routes', () => {
       const token = await registerAndLogin();
       const res = await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({});
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('POST /api/auth/restore', () => {
+    beforeEach(() => {
+      emailService.sendAccountRecoveryEmail.mockResolvedValue();
+    });
+
+    async function softDeleteUser() {
+      const token = await registerAndLogin();
+      await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
+      return emailService.sendAccountRecoveryEmail.mock.calls[0][2]; // recoveryUrl
+    }
+
+    function tokenFromUrl(url) {
+      return new URL(url).searchParams.get('recoveryToken');
+    }
+
+    it('restores account with a valid recovery token', async () => {
+      const recoveryUrl = await softDeleteUser();
+      const rawToken = tokenFromUrl(recoveryUrl);
+      const res = await request(app).post('/api/auth/restore').send({ token: rawToken });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toContain('recovered');
+      const user = await User.findOne({ email: 'test@example.com' });
+      expect(user.status).toBe('active');
+      expect(user.deletedAt).toBeNull();
+    });
+
+    it('returns 400 for an invalid token', async () => {
+      await softDeleteUser();
+      const res = await request(app).post('/api/auth/restore').send({ token: 'invalidtoken' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 for an expired token', async () => {
+      await softDeleteUser();
+      await User.findOneAndUpdate({ email: 'test@example.com' }, { recoveryTokenExpiry: new Date(Date.now() - 1000) });
+      const recoveryUrl = emailService.sendAccountRecoveryEmail.mock.calls[0][2];
+      const rawToken = tokenFromUrl(recoveryUrl);
+      const res = await request(app).post('/api/auth/restore').send({ token: rawToken });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when token field is missing', async () => {
+      const res = await request(app).post('/api/auth/restore').send({});
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('POST /api/auth/recover', () => {
+    beforeEach(() => {
+      emailService.sendAccountRecoveryEmail.mockResolvedValue();
+    });
+
+    it('sends a recovery email for a deleted account within grace period', async () => {
+      const token = await registerAndLogin();
+      await request(app).delete('/api/users/me').set('Authorization', `Bearer ${token}`).send({ password: PASS });
+      emailService.sendAccountRecoveryEmail.mockClear();
+
+      const res = await request(app).post('/api/auth/recover').send({ email: 'test@example.com' });
+      expect(res.statusCode).toBe(200);
+      expect(emailService.sendAccountRecoveryEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 200 silently for a non-deleted account (no email sent)', async () => {
+      await registerAndLogin();
+      emailService.sendAccountRecoveryEmail.mockClear();
+      const res = await request(app).post('/api/auth/recover').send({ email: 'test@example.com' });
+      expect(res.statusCode).toBe(200);
+      expect(emailService.sendAccountRecoveryEmail).not.toHaveBeenCalled();
+    });
+
+    it('returns 200 silently for an unknown email', async () => {
+      const res = await request(app).post('/api/auth/recover').send({ email: 'nobody@example.com' });
+      expect(res.statusCode).toBe(200);
+      expect(emailService.sendAccountRecoveryEmail).not.toHaveBeenCalled();
     });
   });
 });

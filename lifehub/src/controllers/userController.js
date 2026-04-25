@@ -15,6 +15,8 @@ const emailService = require('../services/emailService');
 const logger = require('../config/logger');
 const { revoke } = require('../middleware/tokenBlacklist');
 
+const GRACE_DAYS = parseInt(process.env.RECOVERY_GRACE_DAYS || '30', 10);
+
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
@@ -155,26 +157,32 @@ async function deleteMe(req, res, next) {
       return res.status(401).json({ error: 'Password is incorrect' });
     }
 
-    await User.findByIdAndDelete(req.user.userId);
-
-    await Promise.all([
-      Task.deleteMany({ userId: req.user.userId }),
-      Event.deleteMany({ userId: req.user.userId }),
-      Contact.deleteMany({ userId: req.user.userId }),
-      Category.deleteMany({ userId: req.user.userId }),
-      Transaction.deleteMany({ userId: req.user.userId }),
-      ShoppingList.deleteMany({ userId: req.user.userId }),
-    ]);
-
-    await AuditLog.create({
-      action: 'account_deleted_self',
-      adminId: req.user.userId,
-      targetId: req.user.userId,
-      meta: { email: user.email },
-    }).catch(() => {});
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    user.status = 'deleted';
+    user.deletedAt = new Date();
+    user.recoveryToken = hashToken(rawToken);
+    user.recoveryTokenExpiry = new Date(Date.now() + GRACE_DAYS * 24 * 60 * 60 * 1000);
+    user.pendingEmail = null;
+    user.emailChangeToken = null;
+    user.emailChangeTokenExpiry = null;
+    await user.save();
 
     if (req.user?.jti) revoke(req.user.jti, req.user.exp);
-    res.json({ message: 'Account deleted' });
+
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:8080';
+    const recoveryUrl = `${clientUrl}?recoveryToken=${rawToken}`;
+    emailService.sendAccountRecoveryEmail(user.email, user.name, recoveryUrl, GRACE_DAYS).catch((err) =>
+      logger.warn('Recovery email failed', { error: err.message })
+    );
+
+    await AuditLog.create({
+      action: 'account_deletion_scheduled',
+      adminId: req.user.userId,
+      targetId: req.user.userId,
+      meta: { email: user.email, graceDays: GRACE_DAYS },
+    }).catch(() => {});
+
+    res.json({ message: `Your account has been scheduled for deletion in ${GRACE_DAYS} days. Check your email for recovery instructions.` });
   } catch (err) {
     next(err);
   }

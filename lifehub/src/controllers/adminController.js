@@ -25,12 +25,13 @@ async function getStatus(req, res, next) {
     const emailProvider = await configService.get('email.provider');
     const emailUser = await configService.get('email.user');
 
-    const [total, pending, active, invited, inactive] = await Promise.all([
+    const [total, pending, active, invited, inactive, deleted] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ status: 'pending' }),
       User.countDocuments({ status: 'active' }),
       User.countDocuments({ status: 'invited' }),
       User.countDocuments({ status: 'inactive' }),
+      User.countDocuments({ status: 'deleted' }),
     ]);
 
     res.json({
@@ -40,7 +41,7 @@ async function getStatus(req, res, next) {
         provider: emailProvider || null,
         user: emailUser || null,
       },
-      users: { total, pending, active, invited, inactive },
+      users: { total, pending, active, invited, inactive, deleted },
       server: { uptime: Math.floor(process.uptime()), nodeVersion: process.version },
     });
   } catch (err) {
@@ -266,6 +267,26 @@ async function revokeUserSessions(req, res, next) {
   }
 }
 
+async function cancelDeletion(req, res, next) {
+  try {
+    const user = await User.findById(req.params.id).select('+recoveryToken +recoveryTokenExpiry');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.status !== 'deleted') return res.status(400).json({ error: 'User account is not scheduled for deletion' });
+
+    user.status = 'active';
+    user.deletedAt = null;
+    user.recoveryToken = null;
+    user.recoveryTokenExpiry = null;
+    await user.save();
+
+    await audit('deletion_cancelled', req.user.userId, user._id, null, { email: user.email });
+    logger.info('Account deletion cancelled by admin', { targetId: user._id, adminId: req.user.userId });
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getAuditLog(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -296,6 +317,6 @@ async function getAuditLog(req, res, next) {
 module.exports = {
   getStatus,
   getEmailConfig, updateEmailConfig, testEmail,
-  listUsers, updateUser, createUser, approveUser, rejectUser, resendInvite, revokeUserSessions,
+  listUsers, updateUser, createUser, approveUser, rejectUser, resendInvite, revokeUserSessions, cancelDeletion,
   getAuditLog,
 };

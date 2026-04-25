@@ -23,6 +23,7 @@ describe('Auth Routes', () => {
     emailService.sendPasswordResetEmail.mockResolvedValue();
     emailService.sendInviteEmail.mockResolvedValue();
     emailService.sendEmailChangeVerificationEmail.mockResolvedValue();
+    emailService.sendAccountRecoveryEmail.mockResolvedValue();
   });
 
   afterAll(() => dbHelper.disconnect());
@@ -192,6 +193,13 @@ describe('Auth Routes', () => {
       const res = await request(app).post('/api/auth/login').send({ email: 'bob@example.com', password: PASS });
       expect(res.statusCode).toBe(401);
       expect(res.body.error).toContain('deactivated');
+    });
+
+    it('returns 401 for a soft-deleted account with recovery instructions', async () => {
+      await User.findOneAndUpdate({ email: 'bob@example.com' }, { status: 'deleted', deletedAt: new Date() });
+      const res = await request(app).post('/api/auth/login').send({ email: 'bob@example.com', password: PASS });
+      expect(res.statusCode).toBe(401);
+      expect(res.body.error).toContain('scheduled for deletion');
     });
 
     it('logs in successfully with a dotted Gmail address (regression: BUG-1)', async () => {

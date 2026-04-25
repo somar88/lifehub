@@ -66,6 +66,9 @@ async function login(req, res, next) {
     if (user.status === 'inactive') {
       return res.status(401).json({ error: 'Account has been deactivated' });
     }
+    if (user.status === 'deleted') {
+      return res.status(401).json({ error: 'Your account is scheduled for deletion. Check your email for recovery instructions.' });
+    }
 
     if (!(await user.comparePassword(password))) {
       user.loginAttempts = (user.loginAttempts || 0) + 1;
@@ -200,4 +203,60 @@ function logout(req, res) {
   res.json({ message: 'Logged out' });
 }
 
-module.exports = { register, login, logout, forgotPassword, resetPassword, apply, verifyInvite, acceptInvite };
+const GRACE_DAYS = parseInt(process.env.RECOVERY_GRACE_DAYS || '30', 10);
+
+async function recover(req, res, next) {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email, status: 'deleted' });
+
+    if (user && user.deletedAt) {
+      const cutoff = new Date(Date.now() - GRACE_DAYS * 24 * 60 * 60 * 1000);
+      if (user.deletedAt > cutoff) {
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        user.recoveryToken = hashToken(rawToken);
+        user.recoveryTokenExpiry = new Date(Date.now() + GRACE_DAYS * 24 * 60 * 60 * 1000);
+        await user.save();
+
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:8080';
+        const recoveryUrl = `${clientUrl}?recoveryToken=${rawToken}`;
+        emailService.sendAccountRecoveryEmail(user.email, user.name, recoveryUrl, GRACE_DAYS).catch((err) =>
+          logger.warn('Recovery email failed', { error: err.message })
+        );
+      }
+    }
+
+    res.json({ message: 'If your account is eligible for recovery, a link has been sent to your email.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function restoreAccount(req, res, next) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const { token } = req.body;
+    const user = await User.findOne({
+      recoveryToken: hashToken(token),
+      recoveryTokenExpiry: { $gt: new Date() },
+      status: 'deleted',
+    }).select('+recoveryToken +recoveryTokenExpiry');
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired recovery token' });
+
+    user.status = 'active';
+    user.deletedAt = null;
+    user.recoveryToken = null;
+    user.recoveryTokenExpiry = null;
+    await user.save();
+
+    logger.info('Account recovered', { userId: user._id });
+    res.json({ message: 'Your account has been recovered. You can now log in.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login, logout, forgotPassword, resetPassword, apply, verifyInvite, acceptInvite, recover, restoreAccount };

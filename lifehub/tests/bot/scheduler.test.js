@@ -1,8 +1,13 @@
 'use strict';
 
-jest.mock('../../src/models/User', () => ({ find: jest.fn(), findById: jest.fn() }));
-jest.mock('../../src/models/Event', () => ({ find: jest.fn() }));
-jest.mock('../../src/models/Task', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../../src/models/User', () => ({ find: jest.fn(), findById: jest.fn(), findByIdAndDelete: jest.fn() }));
+jest.mock('../../src/models/Event', () => ({ find: jest.fn(), deleteMany: jest.fn() }));
+jest.mock('../../src/models/Task', () => ({ find: jest.fn(), countDocuments: jest.fn(), deleteMany: jest.fn() }));
+jest.mock('../../src/models/Contact', () => ({ deleteMany: jest.fn() }));
+jest.mock('../../src/models/Category', () => ({ deleteMany: jest.fn() }));
+jest.mock('../../src/models/Transaction', () => ({ deleteMany: jest.fn() }));
+jest.mock('../../src/models/ShoppingList', () => ({ deleteMany: jest.fn() }));
+jest.mock('../../src/models/AuditLog', () => ({ create: jest.fn().mockResolvedValue({}) }));
 jest.mock('../../src/config/logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(),
 }));
@@ -16,7 +21,12 @@ const User = require('../../src/models/User');
 const Event = require('../../src/models/Event');
 const Task = require('../../src/models/Task');
 const emailService = require('../../src/services/emailService');
-const { eventReminders, taskReminders, dailyDigests } = require('../../src/bot/scheduler');
+const { eventReminders, taskReminders, dailyDigests, purgeDeletedAccounts, _resetPurgeDate } = require('../../src/bot/scheduler');
+const Contact = require('../../src/models/Contact');
+const Category = require('../../src/models/Category');
+const Transaction = require('../../src/models/Transaction');
+const ShoppingList = require('../../src/models/ShoppingList');
+const AuditLog = require('../../src/models/AuditLog');
 
 function mockBot() {
   return { telegram: { sendMessage: jest.fn().mockResolvedValue({}) } };
@@ -254,6 +264,55 @@ describe('scheduler', () => {
       User.find.mockResolvedValue([]);
       await dailyDigests(bot);
       expect(bot.telegram.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('purgeDeletedAccounts', () => {
+    function mockFind(results) {
+      User.find.mockReturnValue({ lean: jest.fn().mockResolvedValue(results) });
+    }
+
+    beforeEach(() => {
+      _resetPurgeDate();
+      jest.clearAllMocks();
+      [Contact.deleteMany, Category.deleteMany, Transaction.deleteMany,
+       ShoppingList.deleteMany, Task.deleteMany, Event.deleteMany,
+       User.findByIdAndDelete, AuditLog.create].forEach(fn => fn.mockResolvedValue({}));
+    });
+
+    it('hard-deletes users whose grace period has expired', async () => {
+      const expiredUser = { _id: 'uid1', email: 'gone@example.com' };
+      mockFind([expiredUser]);
+
+      await purgeDeletedAccounts();
+
+      expect(User.findByIdAndDelete).toHaveBeenCalledWith('uid1');
+      expect(Task.deleteMany).toHaveBeenCalledWith({ userId: 'uid1' });
+      expect(AuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'account_purged', meta: { email: 'gone@example.com' } })
+      );
+    });
+
+    it('does not purge when no accounts have expired', async () => {
+      mockFind([]);
+      await purgeDeletedAccounts();
+      expect(User.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('runs only once per calendar day', async () => {
+      mockFind([]);
+      await purgeDeletedAccounts();
+      await purgeDeletedAccounts();
+      expect(User.find).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs again after _resetPurgeDate is called', async () => {
+      mockFind([]);
+      await purgeDeletedAccounts();
+      _resetPurgeDate();
+      mockFind([]);
+      await purgeDeletedAccounts();
+      expect(User.find).toHaveBeenCalledTimes(2);
     });
   });
 });

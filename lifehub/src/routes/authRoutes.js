@@ -42,6 +42,15 @@ const applyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const recoverLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  skip: skipInTest,
+  message: { error: 'Too many recovery requests. Please try again in 1 hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 router.post('/register', testOnly, [
   body('name').notEmpty().trim().withMessage('Name is required'),
   emailBody(),
@@ -76,6 +85,12 @@ router.post('/accept-invite', [
   body('token').notEmpty().withMessage('Token is required'),
   passwordBody('password', 'Password'),
 ], authController.acceptInvite);
+
+router.post('/recover', recoverLimiter, [emailBody()], authController.recover);
+
+router.post('/restore', [
+  body('token').notEmpty().withMessage('Token is required'),
+], authController.restoreAccount);
 
 router.post('/logout', auth, authController.logout);
 

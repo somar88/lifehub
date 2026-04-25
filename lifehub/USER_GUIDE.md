@@ -145,6 +145,8 @@ curl -s -X POST http://your-server:3000/api/auth/accept-invite \
 
 > **Password requirements:** minimum 8 characters with at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. `Ada@Pass1!`).
 
+> **Tip (web client):** A live strength meter appears below the password field as you type, showing Weak → Fair → Good → Strong. It turns green when all five requirements are met.
+
 Your account is now `active`. Save the token:
 
 ```bash
@@ -279,7 +281,7 @@ Use standard [IANA timezone names](https://en.wikipedia.org/wiki/List_of_tz_data
 
 ### Change your password
 
-Requires your current password for verification. The new password must meet the same complexity requirements as registration (min 8 chars, uppercase, lowercase, number, special character).
+Requires your current password for verification. The new password must meet the same complexity requirements as registration (min 8 chars, uppercase, lowercase, number, special character). The web client shows a live strength meter below the new password field as you type.
 
 ```bash
 curl -s -X POST http://your-server:3000/api/users/me/password \

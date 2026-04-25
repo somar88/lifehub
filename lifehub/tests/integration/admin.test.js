@@ -66,13 +66,15 @@ describe('Admin Routes', () => {
   // ── System Status ─────────────────────────────────────────────────────────
 
   describe('GET /api/admin/system/status', () => {
-    it('returns system status with per-status user counts', async () => {
+    it('returns system status with per-status user counts including deleted', async () => {
       await User.create({ name: 'P', email: 'p@example.com', passwordHash: null, isActive: false, status: 'pending' });
+      await User.create({ name: 'D', email: 'd@example.com', passwordHash: null, status: 'deleted', deletedAt: new Date() });
       const res = await request(app).get('/api/admin/system/status').set('Authorization', `Bearer ${adminToken}`);
       expect(res.statusCode).toBe(200);
       expect(res.body.database.status).toBe('connected');
-      expect(res.body.users.total).toBeGreaterThanOrEqual(3);
+      expect(res.body.users.total).toBeGreaterThanOrEqual(4);
       expect(res.body.users.pending).toBe(1);
+      expect(res.body.users.deleted).toBe(1);
       expect(res.body.users.active).toBeGreaterThanOrEqual(2);
       expect(res.body.server.uptime).toBeGreaterThanOrEqual(0);
     });
@@ -441,6 +443,43 @@ describe('Admin Routes', () => {
     it('writes an audit log entry', async () => {
       await request(app).post(`/api/admin/users/${normalUser._id}/revoke-sessions`).set('Authorization', `Bearer ${adminToken}`);
       const log = await AuditLog.findOne({ action: 'sessions_revoked', targetId: normalUser._id });
+      expect(log).not.toBeNull();
+    });
+  });
+
+  // ── Cancel Deletion ───────────────────────────────────────────────────────
+
+  describe('POST /api/admin/users/:id/cancel-deletion', () => {
+    it('restores a soft-deleted account to active', async () => {
+      await User.findByIdAndUpdate(normalUser._id, { status: 'deleted', deletedAt: new Date() });
+      const res = await request(app)
+        .post(`/api/admin/users/${normalUser._id}/cancel-deletion`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.status).toBe('active');
+      expect(res.body.deletedAt).toBeNull();
+    });
+
+    it('returns 400 when user is not scheduled for deletion', async () => {
+      const res = await request(app)
+        .post(`/api/admin/users/${normalUser._id}/cancel-deletion`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 404 for unknown user', async () => {
+      const res = await request(app)
+        .post('/api/admin/users/000000000000000000000000/cancel-deletion')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('writes an audit log entry', async () => {
+      await User.findByIdAndUpdate(normalUser._id, { status: 'deleted', deletedAt: new Date() });
+      await request(app)
+        .post(`/api/admin/users/${normalUser._id}/cancel-deletion`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      const log = await AuditLog.findOne({ action: 'deletion_cancelled', targetId: normalUser._id });
       expect(log).not.toBeNull();
     });
   });
