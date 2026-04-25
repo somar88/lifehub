@@ -52,6 +52,37 @@ function showAlert(containerId, message, type = 'error') {
   if (type !== 'error') setTimeout(() => hide(containerId), 4000);
 }
 
+// ── Password strength meter ───────────────────────────────────────────────────
+const PW_LEVELS = [
+  { label: '',       color: null },
+  { label: 'Weak',   color: '#f85149' },
+  { label: 'Weak',   color: '#f85149' },
+  { label: 'Fair',   color: '#f0883e' },
+  { label: 'Good',   color: '#e3b341' },
+  { label: 'Strong', color: '#3fb950' },
+];
+
+function initPasswordMeter(inputId, meterId) {
+  const input = $(inputId);
+  const meter = $(meterId);
+  const segments = meter.querySelectorAll('.pw-strength-bar span');
+  const label = meter.querySelector('.pw-strength-label');
+  input.addEventListener('input', () => {
+    const pw = input.value;
+    if (!pw) {
+      segments.forEach(s => { s.style.background = ''; });
+      label.textContent = '';
+      label.style.color = '';
+      return;
+    }
+    const score = passwordStrength(pw);
+    const { label: text, color } = PW_LEVELS[score];
+    segments.forEach((s, i) => { s.style.background = i < score ? color : ''; });
+    label.textContent = text;
+    label.style.color = color || '';
+  });
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function login(email, password) {
   const data = await api('POST', '/api/auth/login', { email: email.trim(), password });
@@ -1152,4 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#section-profile .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchProfileTab(btn.dataset.tab));
   });
+
+  initPasswordMeter('invite-password', 'invite-pw-strength');
+  initPasswordMeter('profile-new-password', 'profile-pw-strength');
 });

@@ -75,6 +75,10 @@
         <div class="field">
           <label>Password</label>
           <input type="password" id="invite-password" placeholder="At least 8 characters" required minlength="8" />
+          <div class="pw-strength" id="invite-pw-strength" aria-live="polite">
+            <div class="pw-strength-bar"><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="pw-strength-label"></div>
+          </div>
         </div>
         <div class="field">
           <label>Confirm Password</label>
@@ -415,6 +419,10 @@
                 <div class="field">
                   <label>New Password</label>
                   <input type="password" id="profile-new-password" required minlength="8" />
+                  <div class="pw-strength" id="profile-pw-strength" aria-live="polite">
+                    <div class="pw-strength-bar"><span></span><span></span><span></span><span></span><span></span></div>
+                    <div class="pw-strength-label"></div>
+                  </div>
                 </div>
                 <div class="form-actions">
                   <button type="submit" class="btn btn-primary">Change Password</button>

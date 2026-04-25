@@ -9,6 +9,7 @@ const {
   toDatetimeLocalValue,
   currentMonthValue,
   periodToRange,
+  passwordStrength,
 } = require('../utils');
 
 // ── escHtml ───────────────────────────────────────────────────────────────────
@@ -169,5 +170,54 @@ describe('periodToRange', () => {
     const [start, end] = periodToRange('2026-06');
     expect(typeof start).toBe('string');
     expect(typeof end).toBe('string');
+  });
+});
+
+// ── passwordStrength ──────────────────────────────────────────────────────────
+
+describe('passwordStrength', () => {
+  it('returns 0 for empty string', () => {
+    expect(passwordStrength('')).toBe(0);
+  });
+
+  it('returns 1 when only one criterion is met (lowercase, short)', () => {
+    // length fails, uppercase fails, digit fails, special fails — only lowercase passes
+    expect(passwordStrength('abc')).toBe(1);
+  });
+
+  it('returns 2 for 8+ lowercase only (length + lowercase)', () => {
+    expect(passwordStrength('abcdefgh')).toBe(2);
+  });
+
+  it('returns 3 for length + uppercase + lowercase', () => {
+    expect(passwordStrength('Abcdefgh')).toBe(3);
+  });
+
+  it('returns 4 for length + uppercase + lowercase + digit', () => {
+    expect(passwordStrength('Abcdefg1')).toBe(4);
+  });
+
+  it('returns 5 when all criteria are met', () => {
+    expect(passwordStrength('Abcdefg1!')).toBe(5);
+  });
+
+  it('counts various special characters', () => {
+    expect(passwordStrength('Abcdefg1@')).toBe(5);
+    expect(passwordStrength('Abcdefg1#')).toBe(5);
+    expect(passwordStrength('Abcdefg1 ')).toBe(5); // space is non-alphanumeric
+  });
+
+  it('returns 1 for a single special character (no other criteria met)', () => {
+    expect(passwordStrength('!')).toBe(1);
+  });
+
+  it('returns 2 for digits-only string of length >= 8', () => {
+    // length + digit, no letters or special chars
+    expect(passwordStrength('12345678')).toBe(2);
+  });
+
+  it('is not fooled by a long but simple password', () => {
+    // very long but only lowercase — still missing 3 criteria
+    expect(passwordStrength('aaaaaaaaaaaaaaaa')).toBe(2);
   });
 });

@@ -46,6 +46,16 @@ function periodToRange(period) {
   return [start, end];
 }
 
+function passwordStrength(pw) {
+  return [
+    pw.length >= 8,
+    /[A-Z]/.test(pw),
+    /[a-z]/.test(pw),
+    /[0-9]/.test(pw),
+    /[^A-Za-z0-9]/.test(pw),
+  ].filter(Boolean).length;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { escHtml, formatDate, formatDateTime, formatCurrency, toDateInputValue, toDatetimeLocalValue, currentMonthValue, periodToRange };
+  module.exports = { escHtml, formatDate, formatDateTime, formatCurrency, toDateInputValue, toDatetimeLocalValue, currentMonthValue, periodToRange, passwordStrength };
 }

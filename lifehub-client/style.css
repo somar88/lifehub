@@ -191,6 +191,12 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 .alert-success { background: rgba(63,185,80,.12); border-color: var(--success); color: var(--success); }
 .alert-info    { background: rgba(56,139,253,.12); border-color: var(--link); color: var(--link-hover); }
 
+/* ── Password strength meter ────────────────────────────────────────────────── */
+.pw-strength { margin-top: .45rem; }
+.pw-strength-bar { display: flex; gap: 3px; height: 4px; }
+.pw-strength-bar span { flex: 1; border-radius: 2px; background: var(--border); transition: background 200ms ease; }
+.pw-strength-label { font-size: .72rem; margin-top: .3rem; min-height: 1em; color: var(--text-subtle); transition: color 200ms ease; }
+
 /* ── Table ──────────────────────────────────────────────────────────────────── */
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th { padding: .65rem 1.25rem; text-align: left; font-size: .78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
